@@ -1,0 +1,120 @@
+{
+    "graph": {
+        "type": "BYTEA"
+    },
+    "signature": {
+        "type": "BYTEA",
+        "primary_key": true
+    },
+    "gca": {
+        "type": "BYTEA",
+        "null": true
+    },
+    "gcb": {
+        "type": "BYTEA",
+        "null": true
+    },
+    "ancestor": {
+        "type": "BYTEA",
+        "null": true
+    },
+    "reference_count": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "_reference_count": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "generation": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "code_depth": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "codon_depth": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "num_codes": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "num_unique_codes": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "raw_num_codons": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "opt_num_codons": {
+        "type": "INTEGER",
+        "default": "0"
+    },
+    "num_inputs": {
+        "type": "SMALLINT",
+        "default": "0"
+    },
+    "input_types": {
+        "null": true,
+        "array": true,
+        "type": "INTEGER",
+        "index": "gin"
+    },
+    "num_outputs": {
+        "type": "SMALLINT",
+        "default": "0"
+    },
+    "output_types": {
+        "null": true,
+        "array": true,
+        "type": "INTEGER",
+        "index": "gin"
+    },
+    "alpha_class": {
+        "null": true,
+        "type": "BIGINT"
+    },
+    "beta_class": {
+        "null": true,
+        "type": "BIGINT"
+    },
+    "properties": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "evolvability": {
+        "type": "DOUBLE PRECISION",
+        "default": "0.0"
+    },
+    "_evolvability": {
+        "type": "DOUBLE PRECISION",
+        "default": "0.0"
+    },
+    "count": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "_count": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "creator": {
+        "type": "BYTEA"
+    },
+    "updated": {
+        "type": "TIMESTAMP",
+        "default": "NOW()"
+    },
+    "created": {
+        "type": "TIMESTAMP",
+        "default": "NOW()"
+    },
+    "meta_data": {
+        "type": "BYTEA",
+        "null": true
+    }
+}

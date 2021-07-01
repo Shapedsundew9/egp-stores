@@ -1,0 +1,653 @@
+{
+    "graph": {
+        "meta": {
+            "description": "Defines the sub-codes of the genetic code and how they are connected together."
+        },
+        "type": "dict",
+        "required": true,
+        "schmea": {
+            "A": {
+                "required": false,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I", "C"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_type"
+                        }
+                    ]
+                }
+            },
+            "B": {
+                "required": false,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I", "C", "A"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_type"
+                        }
+                    ]
+                }
+            },
+            "C": {
+                "required": false,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 2,
+                    "maxlength": 2,
+                    "items": [
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_constant_type"
+                        },
+                        {
+                            "type": "string",
+                            "check_with": "valid_value"
+                        }
+                    ]
+                }
+            },
+            "U": {
+                "required": false,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I", "C", "A", "B"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_type"
+                        }
+                    ]
+                }
+            },
+            "O": {
+                "required": true,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I", "C", "A", "B"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_type"
+                        }
+                    ]
+                }
+            },
+            "P": {
+                "required": false,
+                "type": "list",
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I", "C", "A", "B"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "min": -32768,
+                            "max": 32767,
+                            "check_with": "valid_type"
+                        }
+                    ]
+                }
+            },
+            "F": {
+                "required": false,
+                "type": "list",
+                "minlength": 1,
+                "maxlength": 1,
+                "schema": {
+                    "type": "list",
+                    "minlength": 3,
+                    "maxlength": 3,
+                    "items": [
+                        {
+                            "type": "string",
+                            "allowed": ["I"]
+                        },
+                        {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 255,
+                            "check_with": "valid_index"
+                        },
+                        {
+                            "type": ["integer", "string"],
+                            "allowed": ["bool", "16900"]
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "signature": {
+        "meta": {
+            "description": "Unique identifier for this genetic code."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "regex": "[0-9a-f]{64}",
+        "default_setter": "set_signature"
+    },
+    "gca": {
+        "meta": {
+            "description": "The signature of Genetic Code A or the 'zero entry' if this genetic code is a codon. Its connectivity to the Inputs, Constants, genetic code B and outputs are defined in the 'graph'."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "nullable": true,
+        "regex": "[0-9a-f]{64}",
+        "default": null
+    },
+    "gcb": {
+        "meta": {
+            "description": "The signature of Genetic Code B or the 'zero entry' if it is not connected to anything. Connectivity to the Inputs, Constants, genetic code A and outputs are defined in the 'graph'."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "nullable": true,
+        "regex": "[0-9a-f]{64}",
+        "default": null
+    },
+    "ancestora": {
+        "meta": {
+            "description": "The most recent ancestor still in existence."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "nullable": true,
+        "regex": "[0-9a-f]{64}",
+        "default": null
+    },
+    "ancestorb": {
+        "meta": {
+            "description": "The second most recent ancestor still in existence. May be the same generation as ancestora if this GC was sexually concieved."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "nullable": true,
+        "regex": "[0-9a-f]{64}",
+        "default": null
+    },
+    "pgc": {
+        "meta": {
+            "description": "The physical GC that created this GC."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "nullable": true,
+        "regex": "[0-9a-f]{64}",
+        "default": null
+    },
+    "reference_count": {
+        "meta": {
+            "description": "The number of times this code is referenced in other codes. If this code is referenced by code A once and no other then the reference count is 1. If genetic code X is then referenced by genetic code Y this code is referenced by both X & Y (through X) and the count is 2."
+        },
+        "type": "integer",
+        "min": 0,
+        "default": 0
+    },
+    "_reference_count": {
+        "meta": {
+            "description": "The reference count when the genetic code was copied from the higher layer."
+        },
+        "type": "integer",
+        "min": 0,
+        "default": 0
+    },
+    "generation": {
+        "meta": {
+            "description": "The number of generations of genetic code evolved to create this code. A codon is generation always generation 1. This value may change if the creator changes."
+        },
+        "type": "integer",
+        "min": 0,
+        "default": 0
+    },
+    "code_depth": {
+        "meta": {
+            "description": "The depth of the code vertex graph."
+        },
+        "type": "integer",
+        "min": 1,
+        "default": 1
+    },
+    "codon_depth": {
+        "meta": {
+            "description": "The depth of the graph after expansion to codon vertices."
+        },
+        "type": "integer",
+        "min": 1,
+        "default": 1
+    },
+    "num_codes": {
+        "meta": {
+            "description": "The number of vertices in the code vertex graph."
+        },
+        "type": "integer",
+        "min": 1,
+        "default": 1
+    },
+    "num_unique_codes": {
+        "meta": {
+            "description": "The number of unique codes in the code vertex graph."
+        },
+        "type": "integer",
+        "min": 1,
+        "default": 1
+    },
+    "raw_num_codons": {
+        "meta": {
+            "description": "The number of verticies in the codon vertex graph."
+        },
+        "type": "integer",
+        "min": 1,
+        "default": 1
+    },
+    "opt_num_codons": {
+        "meta": {
+            "description": "The number of verticies in the codon vertex graph after optimisation. As optimisations improve this value may change."
+        },
+        "type": "integer",
+        "min": 0,
+        "default_setter": "set_opt_num_codons"
+    },
+    "num_inputs": {
+        "meta": {
+            "description": "The number of inputs to the code."
+        },
+        "type": "integer",
+        "min": 0,
+        "default_setter": "set_num_inputs"
+    },
+    "input_types": {
+        "meta": {
+            "description": "GC input type definitions."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": -2147483648,
+            "max": 2147483647,
+            "check_with": "valid_gc_type"
+        },
+        "default_setter": "set_input_types"
+    },
+    "num_outputs": {
+        "meta": {
+            "description": "The number of outputs to the code."
+        },
+        "type": "integer",
+        "min": 1,
+        "default_setter": "set_num_outputs"
+    },
+    "output_types": {
+        "meta": {
+            "description": "GC output type definitions."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": -2147483648,
+            "max": 2147483647,
+            "check_with": "valid_gc_type"
+        },
+        "default_setter": "set_output_types"
+    },
+    "alpha_class": {
+        "meta": {
+            "description": "The classification of the genetic code."
+        },
+        "type": "integer",
+        "default": -1
+    },
+    "beta_class": {
+        "meta": {
+            "description": "The classification of the genetic code."
+        },
+        "type": "integer",
+        "default": -1
+    },
+    "properties": {
+        "meta": {
+            "description": "The properties of the inputs & outputs"
+        },
+        "type": ["dict", "integer"],
+        "max": 9223372036854775807,
+        "min": -9223372036854775808,
+        "schema": {
+            "extended": {
+                "type": "boolean",
+                "default": false
+            },
+            "constant": {
+                "type": "boolean",
+                "default": false
+            },
+            "conditional": {
+                "type": "boolean",
+                "default": false
+            },
+            "deterministic": {
+                "type": "boolean",
+                "default": false
+            },
+            "memory_modify": {
+                "type": "boolean",
+                "default": false
+            },
+            "object_modify": {
+                "type": "boolean",
+                "default": false
+            },
+            "physical": {
+                "type": "boolean",
+                "default": false
+            },
+            "arithmetic": {
+                "type": "boolean",
+                "default": false
+            },
+            "logical": {
+                "type": "boolean",
+                "default": false
+            },
+            "bitwise": {
+                "type": "boolean",
+                "default": false
+            }
+        },
+        "default": {}
+    },
+    "evolvability": {
+        "meta": {
+            "description": "A measure of success of the genetic codes descendants. The higher the better."
+        },
+        "type": "list",
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+        }
+    },
+    "_evolvability": {
+        "meta": {
+            "description": "The evolvability when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+        }
+    },
+    "ecount": {
+        "meta": {
+            "description": "The number of evolvability updates in this genetic codes life time."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": 1,
+            "default": 1
+        }
+    },
+    "_ecount": {
+        "meta": {
+            "description": "The count when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": 1,
+            "default": 1
+        }
+    },
+    "fitness": {
+        "meta": {
+            "description": "A measure of success of the genetic code. The higher the better."
+        },
+        "type": "list",
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+        },
+        "default": [1.0]
+    },
+    "_fitness": {
+        "meta": {
+            "description": "The fitness when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+        },
+        "default": [1.0]
+    },
+    "fcount": {
+        "meta": {
+            "description": "The number of fitness updates in this genetic codes life time."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": 1,
+            "default": 1
+        },
+        "default": [1]
+    },
+    "_fcount": {
+        "meta": {
+            "description": "The count when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "schema": {
+            "type": "integer",
+            "min": 0,
+            "default": 0
+        },
+        "default": [1]
+    },
+    "creator": {
+        "meta": {
+            "description": "The UUID identifying the creator. If the genetic code has been created in another microbiome at an earlier time then this field will be updated."
+        },
+        "type": "string",
+        "minlength": 64,
+        "maxlength": 64,
+        "regex": "[0-9a-f]{64}",
+        "default": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "updated": {
+        "meta": {
+            "description": "The date and time of the last modification to this genetic code."
+        },
+        "type": "string",
+        "minlength": 27,
+        "maxlength": 27,
+        "regex": "20[2-9][0-9]-(1[0-2]|0[1-9])-([0-2][0-9]|3[01])T[0-2][0-9](:[0-5][0-9]){2}\\.[0-9]{6}Z",
+        "check_with": "valid_created",
+        "default_setter": "set_created"
+    },
+    "created": {
+        "meta": {
+            "description": "The date and time of the codes creation. If the genetic code has been created in another microbiome at an earlier time then this field will be updated."
+        },
+        "type": "string",
+        "minlength": 27,
+        "maxlength": 27,
+        "regex": "20[2-9][0-9]-(1[0-2]|0[1-9])-([0-2][0-9]|3[01])T[0-2][0-9](:[0-5][0-9]){2}\\.[0-9]{6}Z",
+        "check_with": "valid_created",
+        "default_setter": "set_created"
+    },
+    "meta_data": {
+        "meta": {
+            "description": "Other data associated with this genetic code."
+        },
+        "type": "dict",
+        "required": true,
+        "schema": {
+            "name": {
+                "type": "string",
+                "maxlength": 255
+            },
+            "extended_properties": {
+                "type": "dict"
+            },
+            "extended_class": {
+                "type": "dict"
+            },
+            "function": {
+                "type": "dict",
+                "keysrules": {
+                    "type": "string"
+                },
+                "valuesrules": {
+                    "type": "dict",
+                    "keysrules": {
+                        "type": "string",
+                        "regex": "[0-9]*"
+                    },
+                    "valuesrules": {
+                        "type": "dict",
+                        "schema": {
+                            "inline": {
+                                "type": "string",
+                                "minlength": 1,
+                                "maxlength": 1024,
+                                "required": true,
+                                "check_with": "valid_inline"
+                            },
+                            "imports": {
+                                "type": "list",
+                                "maxlength": 32,
+                                "schema": {
+                                    "type": "dict",
+                                    "schema": {
+                                        "module": {
+                                            "type": "string",
+                                            "minlength": 1,
+                                            "maxlength": 64,
+                                            "required": true
+                                        },
+                                        "object": {
+                                            "type": "string",
+                                            "minlength": 1,
+                                            "maxlength": 64,
+                                            "required": true
+                                        }
+                                    }
+                                }
+                            },
+                            "code": {
+                                "type": "string",
+                                "minlength": 1,
+                                "maxlength": 1024
+                            },
+                            "callable": {
+                                "type": "string",
+                                "minlength": 1,
+                                "maxlength": 128,
+                                "check_with": "valid_callable"
+                            }
+                        }
+                    },
+                    "schema": {
+                        "0": {
+                            "required": true
+                        }
+                    }
+                },
+                "schema": {
+                    "python3": {
+                        "required": true
+                    }
+                }
+            }
+        },
+        "default": {}
+    }
+}

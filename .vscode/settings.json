@@ -1,0 +1,10 @@
+{
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "restructuredtext.confPath": "",
+    "githubCompatibility": true,
+    "editor.detectIndentation": false
+}
