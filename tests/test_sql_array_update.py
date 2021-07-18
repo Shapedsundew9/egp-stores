@@ -1,21 +1,27 @@
 """Validate the SQL function array_update()."""
 
 from random import random, randint
-from numpy import array, float64, int64
-from itertools import product
-from pypgtable import table
+from numpy import array, float64, int64, all
+from pypgtable.table import table
 from os.path import join, dirname
 from pytest import approx
+from copy import copy, deepcopy
 
 
-_SQL_STR = 'array_update({cscv}, {cscc}, {pscv}, {pscc}, {cspv}, {cspc}, {fp1}, {i1}), {tv}, {tc}'
-_LITERALS = {'fp1': 1.0, 'i1': 1}
+_DEFAULT_VALUE = 1.0
+_DEFAULT_COUNT = 1
+_SQL_STR = ('SELECT total_weighted_values({cscv}, {cscc}, {pscv}, {pscc}, {cspv}, {cspc}'
+            ', 1.0::DOUBLE PRECISION, 1::BIGINT), total_counts({cscc}, {pscc}, {cspc}, 1::BIGINT),'
+            ' {tv}, {tc} FROM test_table')
 _CONFIG = {
     'database': {
         'dbname': 'test_db'
     },
     'table': 'test_table',
     'schema': {
+        'idx': {
+            'type': 'INTEGER'
+        },
         'cscv': {
             'type': 'DOUBLE PRECISION[]'
         },
@@ -41,6 +47,7 @@ _CONFIG = {
             'type': 'BIGINT[]'
         }
     },
+    'data_files': [],
     'delete_db': False,
     'delete_table': True,
     'create_db': True,
@@ -50,29 +57,43 @@ _CONFIG = {
 }
 
 
-def _random_pair(length):
+def _random_pair(length, base=None):
     """Generate a value & count pair of arrays.
 
-    Value array is populated with flaoting point values 0.0 <= x < 1.0
-    Count array is populated 1 <= x <= 100000
+    Value array is populated with floating point values 0.0 <= x < 1.0
+    If base is defined value is scaled so that the average increment
+    to value per count <= 1.0.
+    Count array is populated 1 <= x <= 50000 if base_count is None
+    If base is defined each value is incremented by 1 <= x <= 50000
 
     Args
     ----
     length (int): The length of the arrays to return.
+    base ((list(float),list(int))): Base value, count arrays
 
     Returns
     -------
-    ((list(float), list(int)))
+    ((list(float), list(int))): Values, counts
     """
-    return [random() for _ in range(length)], [randint(1, 100000) for _ in range(length)]
+    if base is None:
+        values = [random() for _ in range(length)]
+        total_counts = [randint(1, 50000) for _ in range(length)]
+    else:
+        counts = [randint(1, 50000) for _ in base[1]]
+        total_counts = [b + c for c, b in zip(counts, base[1])]
+        values = [v + (((1 - v) * random()) * c) / (b + c) for c, v, b in zip(counts, base[0], base[1])]
+        total_counts.extend([_DEFAULT_COUNT] * (len(base[0]) - length))
+        values.extend([_DEFAULT_VALUE] * (len(base[0]) - length))
+    return values, total_counts
 
 
 def _random_set(lengths):
     """Generate a full set of array parameters based on the lengths provided.
 
     The arrays are returned as ((cscv, cscc), (pscv, pscc), (cspv, cspc))
-    Value arrays are populated with flaoting point values 0.0 <= x < 1.0
+    Value arrays are populated with floating point values 0.0 <= x < 1.0
     Count arrays are populated 1 <= x <= 100000
+    There are constraints on the lengths & counts: cspc <= pscc and cspc <= cscc
 
     Args
     ----
@@ -82,7 +103,16 @@ def _random_set(lengths):
     -------
     ((list(float), list(int)), (list(float), list(int)), (list(float), list(int)))
     """
-    return _random_pair(lengths[0]), _random_pair(lengths[1]), _random_pair(lengths[2])
+    csp = _random_pair(lengths[0])
+    base_pscc = copy(csp[1])
+    base_cscc = copy(csp[1])
+    base_pscv = copy(csp[0])
+    base_cscv = copy(csp[0])
+    base_pscc.extend([_DEFAULT_COUNT] * (lengths[1] - lengths[0]))
+    base_cscc.extend([_DEFAULT_COUNT] * (lengths[2] - lengths[0]))
+    base_pscv.extend([_DEFAULT_VALUE] * (lengths[1] - lengths[0]))
+    base_cscv.extend([_DEFAULT_VALUE] * (lengths[2] - lengths[0]))
+    return _random_pair(lengths[0], (base_cscv, base_cscc)), _random_pair(lengths[0], (base_pscv, base_pscc)), csp
 
 
 def _random_length(criteria, csp_len):
@@ -137,22 +167,16 @@ def _combo_generator():
         psc: pscv & pscc
         csp: cspv & cspc
     Where:
-        '<' means shorter than csp.
         '>' means longer than csp.
         '=' means the same length as csp
+    NB: psc and csc cannot be shorter than csp.
     All the possible combinations of pair lengths are:
         (csc, psc)
         ----------
         ('<', '<')
-        ('<', '>')
         ('<', '=')
-        ('>', '<')
-        ('>', '>')
-        ('>', '=')
         ('=', '<')
-        ('=', '>')
         ('=', '=')
-
     This generator returns a tuple (cscv, cscc, pscv, pscc, cspv, cspc) meeting the
     length constraints of each combination in turn, looping infinitely.
     The array values are random and valid.
@@ -162,11 +186,26 @@ def _combo_generator():
     ((list(float), list(int)), (list(float), list(int)), (list(float), list(int)))
     """
     while True:
-        for combo in product('<>=', repeat=2):
+        for combo in (('<', '<'), ('<', '='), ('=', '<'), ('=', '=')):
             yield _random_set(_random_lengths(combo))
 
 
 def _expected_result(array_set):
+    """Calculate the result we should expect.
+
+    Input data is sanity checked.
+
+    Args
+    ----
+    array_set (see below): Set of arrays.
+            cscv, cscc = array_set[0]
+            pscv, pscc = array_set[1]
+            cspv, cspc = array_set[2]
+
+    Returns
+    -------
+    (list(float), list(int)): tv, tc
+    """
     cscv, cscc = array_set[0]
     pscv, pscc = array_set[1]
     cspv, cspc = array_set[2]
@@ -186,23 +225,64 @@ def _expected_result(array_set):
     cspv = array(cspv, dtype=float64)
     cspc = array(cspc, dtype=int64)
 
-    return list((cscv * cscc + pscv * pscc - cspv * cspc) / (cscc + pscc - cspc))
+    tw = cscv * cscc + pscv * pscc - cspv * cspc
+    tc = cscc + pscc - cspc
+    tv = tw / tc
+
+    # Sanity
+    if not(all(tc > 0) and all(tw >= 0.0) and all(tv >= 0.0) and all(tv <= 1.0)):
+        print("cscv: ", cscv)
+        print("cscc: ", cscc)
+        print("pscv: ", pscv)
+        print("pscc: ", pscc)
+        print("cspv: ", cspv)
+        print("cspc: ", cspc)
+        print("tw: ", tw)
+        print("tv: ", tv)
+        print("tc: ", tc)
+        assert all(tc > 0)
+        assert all(tw >= 0.0)
+        assert all(tv >= 0.0)
+        assert all(tv <= 1.0)
+
+    return [float(v) for v in tv], [int(c) for c in tc]
 
 
 def _generate_test_case():
+    """Test data generator.
+
+    Return a single test case as a tuple of inputs and results.
+
+    Returns
+    -------
+    inputs (): (cscv, cscc, pscv, pscc, cspv, cspc)
+    results (): (tv, tc)
+    """
     input_generator =  _combo_generator()
     while True:
         inputs = next(input_generator)
-        yield inputs, _expected_result(inputs)
+        yield inputs, _expected_result(deepcopy(inputs))
 
 
 def _create_testcases(n):
+    """Genetrate a list of test cases.
+
+    Args
+    ----
+    n (int): Number of test cases to generate.
+
+    Returns
+    -------
+    list(dict): Output of _generate_test_case()
+         in a dictionary format.
+    """
     testcase_generator = _generate_test_case()
     testcases = []
-    for _ in range(10000):
+    for idx in range(n):
         inputs, result = next(testcase_generator)
         testcases.append(
             {
+                'idx': idx,
                 'cscv': inputs[0][0],
                 'cscc': inputs[0][1],
                 'pscv': inputs[1][0],
@@ -217,17 +297,11 @@ def _create_testcases(n):
 
 
 def test_sql_array_update():
+    """Validate the SQL functions match the model."""
     t = table(_CONFIG)
-    with open(join(dirname(__file__), '../data/array_functions.sql'), 'r') as fileptr:
+    with open(join(dirname(__file__), '../genomic_library/data/array_functions.sql'), 'r') as fileptr:
         t.arbitrary_sql(fileptr.read())
-    t.insert(_create_testcases(10000))
-    for row in t.select(_SQL_STR, _LITERALS):
-        print(row)
+    t.insert(_create_testcases(300))
+    for row in t.arbitrary_sql(_SQL_STR):
         assert(row[0] == approx(row[2]))
         assert(row[1] == row[3])
-
-
-if __name__ == '__main__':
-    testcase_generator = _generate_test_case()
-    for _ in range(20):
-        print("Test case: ", next(testcase_generator))
