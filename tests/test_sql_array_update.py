@@ -1,4 +1,4 @@
-"""Validate the SQL function array_update()."""
+"""Validate the SQL functions used by the genomic library."""
 
 from random import random, randint
 from numpy import array, float64, int64, all

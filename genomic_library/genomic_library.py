@@ -1,20 +1,24 @@
 """The Genomic Library class wraps the database_table."""
 
+from copy import deepcopy
+from json import dumps, load, loads
+from logging import NullHandler, getLogger
+from os.path import dirname, join
 from pprint import pformat
-from json import loads, dumps
 from zlib import compress, decompress
-from logging import getLogger
-from json import load
-from os.path import join, dirname
-from pypgtable import table
+
+from pypgtable.table import table
+
 from .entry_validator import entry_validator
-from .utils.text_token import text_token, register_token_code
+from .utils.text_token import register_token_code, text_token
 
 
 _logger = getLogger(__name__)
+_logger.addHandler(NullHandler())
 
 
-_EVO_UPDATE_RAW = '({CSCV} * {CSCC} + {PSCV} * {PSCC} - {CSPV} * {CSPC}) / ({CSCC} + {PSCC} - {CSPC})'
+_EVO_UPDATE_RAW = ('SELECT total_weighted_values({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
+                   ', 1.0::DOUBLE PRECISION, 1::BIGINT)')
 _EVO_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{evolvability}',
     'CSCC': 'EXCLUDED.{count}',
@@ -23,9 +27,9 @@ _EVO_UPDATE_MAP = {
     'PSCV': '{evolvability}',
     'PSCC': '{count}'
 }
-_EVO_UPDATE_STR = _EVO_UPDATE_RAW.format(_EVO_UPDATE_MAP)
-_COUNT_UPDATE_STR = '{count} = {count} + EXCLUDED.{count} - EXCLUDED.{_count}'
-_REF_UPDATE_STR = '{references} = {references} + EXCLUDED.{references} - EXCLUDED.{_references}'
+_EVO_UPDATE_STR = _EVO_UPDATE_RAW.format(**_EVO_UPDATE_MAP)
+_COUNT_UPDATE_STR = '{count} = total_counts({count}, EXCLUDED.{count}, EXCLUDED.{_count}, 1::BIGINT)'
+_REF_UPDATE_STR = '{references} = total_counts({references}, EXCLUDED.{references}, EXCLUDED.{_references}, 1::BIGINT)'
 _UPDATE_STR = '{updated} = NOW(), ' + _EVO_UPDATE_STR + _COUNT_UPDATE_STR + _REF_UPDATE_STR
 _PTR_MAP = {
     'gca': 'signature',
@@ -56,8 +60,20 @@ _PROPERTIES = {
 }
 
 
-with open(join(dirname(__file__), "formats/genomic_library_table_format.json"), "r") as file_ptr:
+with open(join(dirname(__file__), "formats/table_format.json"), "r") as file_ptr:
     _DB_TABLE_SCHEMA = load(file_ptr)
+
+
+# The default config
+_DEFAULT_CONFIG = {
+    'dbname': 'erasmus',
+    'ptr_map': _PTR_MAP,
+    'schema': _DB_TABLE_SCHEMA,
+    'data_file_folder': join(dirname(__file__), 'data'),
+    'data_files': ['codons.json', 'mutations.json'],
+    'create_table': True,
+    'create_db': True
+}
 
 
 register_token_code('E03000', 'Query is not valid: {errors}: {query}')
@@ -175,6 +191,18 @@ def _decode_properties(obj):
     return {b: bool((1 << f) & obj) for b, f in _PROPERTIES.items()}
 
 
+def default_config():
+    """Return a deepcopy of the default genomic library configuration.
+
+    The copy may be modified and used to create a genomic library instance.
+
+    Returns
+    -------
+    (dict): The default genomic_library() configuration.
+    """
+    return deepcopy(_DEFAULT_CONFIG)
+
+
 class genomic_library():
     """Store of genetic codes & associated data.
 
@@ -187,7 +215,7 @@ class genomic_library():
     that is not in the genomic library.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=_DEFAULT_CONFIG):
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple
@@ -200,13 +228,9 @@ class genomic_library():
         ----
         config(pypgtable config): The config is deep copied by pypgtable.
         """
-        config['ptr_map'] = _PTR_MAP
-        config['schema'] = _DB_TABLE_SCHEMA
-        config['data_file_folder'] = join(dirname(__file__), '../data')
-        config['data_files'] = ['codons.json', 'mutations.json']
-        config.setdefault('create_table', True)
-        config.setdefault('create_db', True)
         self._library = table(config)
+        with open(join(dirname(__file__), 'data/array_functions.sql'), 'r') as fileptr:
+            self._library.arbitrary_sql(fileptr.read())
         self._library.register_conversion('graph', _compress_json, _decompress_json)
         self._library.register_conversion('meta_data', _compress_json, _decompress_json)
         self._library.register_conversion('signature', _str_to_sha256, _sha256_to_str)
@@ -267,8 +291,8 @@ class genomic_library():
         Args
         ----
         entry(dict): A genetic code dictionary. That is present in entries.
-        entries(dict): A dictionary entry['signature']: entry of genetic code dictionaries not yet
-            stored in the genomic library.
+        entries(dict): A dictionary entry['signature']: entry of genetic code dictionaries to be
+            stored or updated in the genomic library.
         """
         gca = _NULL_GC_DATA
         if not entry['gca'] is None:
@@ -300,6 +324,16 @@ class genomic_library():
 
 
     def _normalize(self, entries):
+        """Normalize entries before storing. The entries are modified in place.
+
+        Genetic code statistics and meta data are updated / created for storage
+        and checked for consistency. This can be a heavy process.
+
+        Args
+        ----
+        entries(dict): A dictionary entry['signature']: entry of genetic code dictionaries to be
+            stored or updated in the genomic library.
+        """
         self._logger.debug("Normalizing {} entries.".format(len(entries)))
         for signature, entry in entries.items():
             entries[signature] = entry_validator.normalized(entry)

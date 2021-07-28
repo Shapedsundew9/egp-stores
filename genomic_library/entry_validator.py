@@ -105,7 +105,7 @@ class _entry_validator(Validator):
             self._error(field, "Created date-time cannot be in the future.")
 
 
-    def _check_with_valid_gc_type(self, field, value):
+    def _check_with_valid_type(self, field, value):
         if not validate(value) and value != INVALID_VALUE:
             self._error(field, 'Does not exist')
 

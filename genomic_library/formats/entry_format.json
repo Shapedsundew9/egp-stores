@@ -5,7 +5,7 @@
         },
         "type": "dict",
         "required": true,
-        "schmea": {
+        "schema": {
             "A": {
                 "required": false,
                 "type": "list",
@@ -21,8 +21,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -48,8 +47,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -72,11 +70,10 @@
                             "type": ["integer", "string"],
                             "min": -32768,
                             "max": 32767,
-                            "check_with": "valid_constant_type"
+                            "check_with": "valid_type"
                         },
                         {
-                            "type": "string",
-                            "check_with": "valid_value"
+                            "type": "string"
                         }
                     ]
                 }
@@ -96,8 +93,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -123,8 +119,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -150,8 +145,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -179,8 +173,7 @@
                         {
                             "type": "integer",
                             "min": 0,
-                            "max": 255,
-                            "check_with": "valid_index"
+                            "max": 255
                         },
                         {
                             "type": ["integer", "string"],
@@ -342,11 +335,11 @@
         },
         "type": "list",
         "schema": {
-            "type": "integer",
-            "min": -2147483648,
-            "max": 2147483647,
-            "check_with": "valid_gc_type"
-        },
+            "type": ["integer", "string"],
+            "min": -32768,
+            "max": 32767,
+            "check_with": "valid_type"
+},
         "default_setter": "set_input_types"
     },
     "num_outputs": {
@@ -363,11 +356,11 @@
         },
         "type": "list",
         "schema": {
-            "type": "integer",
-            "min": -2147483648,
-            "max": 2147483647,
-            "check_with": "valid_gc_type"
-        },
+            "type": ["integer", "string"],
+            "min": -32768,
+            "max": 32767,
+            "check_with": "valid_type"
+},
         "default_setter": "set_output_types"
     },
     "alpha_class": {
