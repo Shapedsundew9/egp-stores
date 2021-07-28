@@ -1,3 +1,0 @@
-[submodule "utils"]
-	path = genomic_library/utils
-	url = git@github.com:Shapedsundew9/utils.git
