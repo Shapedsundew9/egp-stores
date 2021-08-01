@@ -12,6 +12,7 @@
 # NOTE: Need python-graph-tool from https://git.skewed.de/count0/graph-tool/-/wikis/installation-instructions
 #
 pypgtable
+numpy
 cerberus >= 1.3.2
 ###### Refer to other requirements files ######
 #-r other-requirements.txt
