@@ -155,7 +155,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional
-        'genomic_library': ['formats/*.json'],
+        'genomic_library': ['formats/*.json', 'data/*.json'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may

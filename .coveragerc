@@ -1,4 +1,4 @@
 [run]
 omit =
     tests/*
-    egp-genomic-library/utils/*
+    genomic_library/utils/*
