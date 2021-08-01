@@ -7,11 +7,6 @@ Genetic code types are identified by a signed 16-bit value.
 from json import load
 from os.path import dirname, join
 
-# Guaranteed to be invalid
-INVALID_NAME = {'name': 'invalid'}
-INVALID_VALUE = -1
-
-
 # Load type data
 # TODO: Could convert numerical dict to a list if they are contiguous and start at 0.
 with open(join(dirname(__file__), "data/gc_types.json"), "r") as file_ptr:
@@ -45,7 +40,7 @@ def asint(gc_type_str):
     -------
     (int) GC type value.
     """
-    return gc_type_lookup['n2v'].get(gc_type_str, INVALID_VALUE)
+    return gc_type_lookup['n2v'].get(gc_type_str, gc_type_lookup['v2n']['egp.invalid_type'])
 
 
 def asstr(gc_type_int):
@@ -59,4 +54,4 @@ def asstr(gc_type_int):
     -------
     (str) GC type name.
     """
-    return gc_type_lookup['v2n'].get(gc_type_int, INVALID_NAME)['name']
+    return gc_type_lookup['v2n'].get(gc_type_int, gc_type_lookup['n2v']['egp.invalid_type'])

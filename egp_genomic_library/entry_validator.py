@@ -8,7 +8,7 @@ from pprint import pformat
 
 from cerberus import Validator
 
-from .gc_type import INVALID_VALUE, validate
+from .gc_type import validate
 
 with open(join(dirname(__file__), "formats/entry_format.json"), "r") as file_ptr:
     _ENTRY_SCHEMA = schema = load(file_ptr)
@@ -105,8 +105,8 @@ class _entry_validator(Validator):
             self._error(field, "Created date-time cannot be in the future.")
 
     def _check_with_valid_type(self, field, value):
-        if not validate(value) and value != INVALID_VALUE:
-            self._error(field, 'Does not exist')
+        if not validate(value):
+            self._error(field, 'gc_type {} does not exist.'.format(value))
 
     def _check_with_valid_inline(self, field, value):
         # TODO: Check right number of return parameters and arguments
