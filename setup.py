@@ -124,7 +124,7 @@ setup(
     #   py_modules=["my_module"],
     #
     # packages=find_packages(where=''),  # Required
-    packages=['genomic_library', 'genomic_library.utils'],
+    packages=['egp_genomic_library', 'egp_genomic_library.utils'],
 
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
@@ -155,7 +155,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional
-        'genomic_library': ['formats/*.json', 'data/*.json'],
+        'egp_genomic_library': ['formats/*.json', 'data/*.json'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
