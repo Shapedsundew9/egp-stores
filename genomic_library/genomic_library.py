@@ -7,7 +7,7 @@ from os.path import dirname, join
 from pprint import pformat
 from zlib import compress, decompress
 
-from pypgtable.table import ID_FUNC, table
+from pypgtable import ID_FUNC, table
 
 from .entry_validator import entry_validator
 from .utils.text_token import register_token_code, text_token
