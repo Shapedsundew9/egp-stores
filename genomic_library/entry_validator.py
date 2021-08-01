@@ -5,9 +5,10 @@ from hashlib import sha256
 from json import load
 from os.path import dirname, join
 from pprint import pformat
-from cerberus import Validator
-from .gc_type import validate, INVALID_VALUE
 
+from cerberus import Validator
+
+from .gc_type import INVALID_VALUE, validate
 
 with open(join(dirname(__file__), "formats/entry_format.json"), "r") as file_ptr:
     _ENTRY_SCHEMA = schema = load(file_ptr)
@@ -44,7 +45,7 @@ class _entry_validator(Validator):
 
     # TODO: Make errors ValidationError types for full disclosure
     # https://docs.python-cerberus.org/en/stable/customize.html#validator-error
-    def _check_with_valid_alpha_class(self, field, value):
+    def _check_with_valid_alpha_class(self, field, value):  # noqa: C901
 
         if not value:
             # Valid codon
@@ -77,10 +78,10 @@ class _entry_validator(Validator):
             if "meta_data" in self.document and "parents" in self.document['meta_data']:
                 self._error(
                     field, "If alpha_class == 0 then there are no parents.")
-            if "meta_data" in self.document and not "function" in self.document['meta_data']:
+            if "meta_data" in self.document and "function" not in self.document['meta_data']:
                 self._error(
                     field, "If alpha_class == 0 then there must be a 'function' definition.")
-            elif not "python3" in self.document['meta_data']['function']:
+            elif "python3" not in self.document['meta_data']['function']:
                 self._error(
                     field, "If alpha_class == 0 then there must be a 'python3' definition.")
         else:
@@ -88,15 +89,14 @@ class _entry_validator(Validator):
             if "beta_class" in self.document and not self.document['beta_class']:
                 self._error(
                     field, "If alpha_class != 0, beta_class must != 0.")
-            if "meta_data" in self.document and not "parents" in self.document['meta_data']:
+            if "meta_data" in self.document and "parents" not in self.document['meta_data']:
                 self._error(
                     field, "If alpha_class != 0 then there must be at least one parent.")
-
 
     def _check_with_valid_created(self, field, value):
         try:
             date_time_obj = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
-        except:
+        except ValueError:
             self._error(
                 field, "Created date-time is not valid. Unknown error parsing.")
             return
@@ -104,25 +104,20 @@ class _entry_validator(Validator):
         if date_time_obj > datetime.utcnow():
             self._error(field, "Created date-time cannot be in the future.")
 
-
     def _check_with_valid_type(self, field, value):
         if not validate(value) and value != INVALID_VALUE:
             self._error(field, 'Does not exist')
-
 
     def _check_with_valid_inline(self, field, value):
         # TODO: Check right number of return parameters and arguments
         pass
 
-
     def _check_with_valid_callable(self, field, value):
         # TODO: Check right number of return parameters and arguments. Check arguments all have default=None.
         pass
 
-
     def _normalize_default_setter_set_signature(self, document):
         return define_signature(self.document)
-
 
     def _normalize_default_setter_set_input_types(self, document):
         # Sort the input endpoints by index then return the types as a list
@@ -132,22 +127,17 @@ class _entry_validator(Validator):
             inputs.sort(key=lambda x: x[1])
         return [x[2] for x in inputs]
 
-
     def _normalize_default_setter_set_output_types(self, document):
         return [ep[2] for ep in sorted(document["graph"].get("O", tuple()), key=lambda x:x[1])]
-
 
     def _normalize_default_setter_set_num_inputs(self, document):
         return len(document["graph"].get("I", tuple()))
 
-
     def _normalize_default_setter_set_num_outputs(self, document):
         return len(document["graph"].get("O", tuple()))
 
-
     def _normalize_default_setter_set_opt_num_codons(self, document):
         return 1 if document['gca'] is None and document['gcb'] is None else 0
-
 
     def _normalize_default_setter_set_created(self, document):
         return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -239,8 +229,6 @@ Python 3.8.5
 >>> i()
 2.038336753845215
 """
-
-
 
 
 """

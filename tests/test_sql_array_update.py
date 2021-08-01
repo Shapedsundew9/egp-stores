@@ -1,12 +1,12 @@
 """Validate the SQL functions used by the genomic library."""
 
-from random import random, randint
-from numpy import array, float64, int64, all
-from pypgtable.table import table
-from os.path import join, dirname
-from pytest import approx
 from copy import copy, deepcopy
+from os.path import dirname, join
+from random import randint, random
 
+from numpy import all, array, float64, int64
+from pypgtable.table import table
+from pytest import approx
 
 _DEFAULT_VALUE = 1.0
 _DEFAULT_COUNT = 1
@@ -134,7 +134,8 @@ def _random_length(criteria, csp_len):
     """
     if criteria == '<':
         x_len = csp_len - randint(1, csp_len)
-        if not x_len: x_len = 1
+        if not x_len:
+            x_len = 1
     elif criteria == '>':
         x_len = csp_len + randint(1, csp_len)
     else:
@@ -211,12 +212,18 @@ def _expected_result(array_set):
     cspv, cspc = array_set[2]
 
     max_len = max((len(cscv), len(cscc), len(pscv), len(pscc), len(cspv), len(cspc)))
-    while len(cscv) < max_len: cscv.append(1.0)
-    while len(cscc) < max_len: cscc.append(1)
-    while len(pscv) < max_len: pscv.append(1.0)
-    while len(pscc) < max_len: pscc.append(1)
-    while len(cspv) < max_len: cspv.append(1.0)
-    while len(cspc) < max_len: cspc.append(1)
+    while len(cscv) < max_len:
+        cscv.append(1.0)
+    while len(cscc) < max_len:
+        cscc.append(1)
+    while len(pscv) < max_len:
+        pscv.append(1.0)
+    while len(pscc) < max_len:
+        pscc.append(1)
+    while len(cspv) < max_len:
+        cspv.append(1.0)
+    while len(cspc) < max_len:
+        cspc.append(1)
 
     cscv = array(cscv, dtype=float64)
     cscc = array(cscc, dtype=int64)
@@ -258,7 +265,7 @@ def _generate_test_case():
     inputs (): (cscv, cscc, pscv, pscc, cspv, cspc)
     results (): (tv, tc)
     """
-    input_generator =  _combo_generator()
+    input_generator = _combo_generator()
     while True:
         inputs = next(input_generator)
         yield inputs, _expected_result(deepcopy(inputs))

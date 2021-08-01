@@ -1,9 +1,8 @@
 """Test the genomic library."""
 
 from random import choice
-from genomic_library import genomic_library
-from genomic_library import default_config
-from genomic_library import sha256_to_str
+
+from genomic_library import default_config, genomic_library, sha256_to_str
 
 
 def test_instanciation():
