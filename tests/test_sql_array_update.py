@@ -306,7 +306,7 @@ def _create_testcases(n):
 def test_sql_array_update():
     """Validate the SQL functions match the model."""
     t = table(_CONFIG)
-    with open(join(dirname(__file__), '../genomic_library/data/array_functions.sql'), 'r') as fileptr:
+    with open(join(dirname(__file__), '../egp_genomic_library/data/array_functions.sql'), 'r') as fileptr:
         t.arbitrary_sql(fileptr.read())
     t.insert(_create_testcases(300))
     for row in t.arbitrary_sql(_SQL_STR):

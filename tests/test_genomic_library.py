@@ -2,7 +2,7 @@
 
 from random import choice
 
-from genomic_library import default_config, genomic_library, sha256_to_str
+from egp_genomic_library import default_config, genomic_library, sha256_to_str
 
 
 def test_instanciation():
