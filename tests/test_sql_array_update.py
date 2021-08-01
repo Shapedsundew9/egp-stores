@@ -5,8 +5,9 @@ from os.path import dirname, join
 from random import randint, random
 
 from numpy import all, array, float64, int64
-from pypgtable.table import table
 from pytest import approx
+
+from pypgtable.table import table
 
 _DEFAULT_VALUE = 1.0
 _DEFAULT_COUNT = 1

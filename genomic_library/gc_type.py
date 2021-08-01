@@ -5,8 +5,7 @@ Genetic code types are identified by a signed 16-bit value.
 
 
 from json import load
-from os.path import join, dirname
-
+from os.path import dirname, join
 
 # Guaranteed to be invalid
 INVALID_NAME = {'name': 'invalid'}

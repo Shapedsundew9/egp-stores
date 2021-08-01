@@ -1,8 +1,9 @@
 """A quick & easy way to manage postgresql tables."""
 
+import pathlib
+
 # Always prefer setuptools over distutils
 from setuptools import setup
-import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
 
