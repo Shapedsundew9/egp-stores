@@ -424,6 +424,14 @@
             "bitwise": {
                 "type": "boolean",
                 "default": false
+            },
+            "boolean": {
+                "type": "boolean",
+                "default": false
+            },
+            "sequence": {
+                "type": "boolean",
+                "default": false
             }
         },
         "default": {}

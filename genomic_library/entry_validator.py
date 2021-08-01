@@ -126,7 +126,11 @@ class _entry_validator(Validator):
 
     def _normalize_default_setter_set_input_types(self, document):
         # Sort the input endpoints by index then return the types as a list
-        return [ep[2] for ep in sorted(document["graph"].get("I", tuple()), key=lambda x:x[1])]
+        inputs = []
+        for row in document["graph"].values():
+            inputs.extend((ep for ep in filter(lambda x: x[0] == 'I', row)))
+            inputs.sort(key=lambda x: x[1])
+        return [x[2] for x in inputs]
 
 
     def _normalize_default_setter_set_output_types(self, document):

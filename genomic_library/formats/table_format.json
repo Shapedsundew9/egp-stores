@@ -8,15 +8,15 @@
     },
     "gca": {
         "type": "BYTEA",
-        "null": true
+        "nullable": true
     },
     "gcb": {
         "type": "BYTEA",
-        "null": true
+        "nullable": true
     },
     "ancestor": {
         "type": "BYTEA",
-        "null": true
+        "nullable": true
     },
     "reference_count": {
         "type": "BIGINT",
@@ -59,9 +59,8 @@
         "default": "0"
     },
     "input_types": {
-        "null": true,
-        "array": true,
-        "type": "INTEGER",
+        "nullable": true,
+        "type": "INTEGER[]",
         "index": "gin"
     },
     "num_outputs": {
@@ -69,17 +68,16 @@
         "default": "0"
     },
     "output_types": {
-        "null": true,
-        "array": true,
-        "type": "INTEGER",
+        "nullable": true,
+        "type": "INTEGER[]",
         "index": "gin"
     },
     "alpha_class": {
-        "null": true,
+        "nullable": true,
         "type": "BIGINT"
     },
     "beta_class": {
-        "null": true,
+        "nullable": true,
         "type": "BIGINT"
     },
     "properties": {
@@ -87,12 +85,12 @@
         "default": "0"
     },
     "evolvability": {
-        "type": "DOUBLE PRECISION",
-        "default": "0.0"
+        "type": "DOUBLE PRECISION[]",
+        "default": "ARRAY[0.0]"
     },
     "_evolvability": {
-        "type": "DOUBLE PRECISION",
-        "default": "0.0"
+        "type": "DOUBLE PRECISION[]",
+        "default": "ARRAY[0.0]"
     },
     "count": {
         "type": "BIGINT",
@@ -115,6 +113,6 @@
     },
     "meta_data": {
         "type": "BYTEA",
-        "null": true
+        "nullable": true
     }
 }
