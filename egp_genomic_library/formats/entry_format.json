@@ -186,7 +186,7 @@
     },
     "signature": {
         "meta": {
-            "description": "Unique identifier for this genetic code."
+            "description": "Unique identifier for this genetic code dervived from its essential characteristics."
         },
         "type": "string",
         "minlength": 64,
@@ -196,7 +196,7 @@
     },
     "gca": {
         "meta": {
-            "description": "The signature of Genetic Code A or the 'zero entry' if this genetic code is a codon. Its connectivity to the Inputs, Constants, genetic code B and outputs are defined in the 'graph'."
+            "description": "The signature of Genetic Code A or NULL if this genetic code is a codon. Its connectivity to the Inputs, Constants, genetic code B and outputs are defined in the 'graph'."
         },
         "type": "string",
         "minlength": 64,
@@ -207,7 +207,7 @@
     },
     "gcb": {
         "meta": {
-            "description": "The signature of Genetic Code B or the 'zero entry' if it is not connected to anything. Connectivity to the Inputs, Constants, genetic code A and outputs are defined in the 'graph'."
+            "description": "The signature of Genetic Code B or NULL if it is not connected to anything. Connectivity to the Inputs, Constants, genetic code A and outputs are defined in the 'graph'."
         },
         "type": "string",
         "minlength": 64,
@@ -216,7 +216,7 @@
         "regex": "[0-9a-f]{64}",
         "default": null
     },
-    "ancestora": {
+    "ancestor_a": {
         "meta": {
             "description": "The most recent ancestor still in existence."
         },
@@ -227,9 +227,9 @@
         "regex": "[0-9a-f]{64}",
         "default": null
     },
-    "ancestorb": {
+    "ancestor_b": {
         "meta": {
-            "description": "The second most recent ancestor still in existence. May be the same generation as ancestora if this GC was sexually concieved."
+            "description": "The second most recent ancestor still in existence. May be the same generation as ancestor_a if this GC was sexually concieved."
         },
         "type": "string",
         "minlength": 64,
@@ -267,7 +267,7 @@
     },
     "generation": {
         "meta": {
-            "description": "The number of generations of genetic code evolved to create this code. A codon is generation always generation 1. This value may change if the creator changes."
+            "description": "The number of generations of genetic code evolved to create this code. A codon is always generation 1. This value may change if the creator changes."
         },
         "type": "integer",
         "min": 0,
@@ -323,7 +323,7 @@
     },
     "num_inputs": {
         "meta": {
-            "description": "The number of inputs to the code."
+            "description": "The number of inputs to the genetic code."
         },
         "type": "integer",
         "min": 0,
@@ -331,7 +331,7 @@
     },
     "input_types": {
         "meta": {
-            "description": "GC input type definitions."
+            "description": "The set of types of the inputs in ascending order of type number."
         },
         "type": "list",
         "schema": {
@@ -339,12 +339,26 @@
             "min": -32768,
             "max": 32767,
             "check_with": "valid_type"
-},
+        },
+        "maxlength": 256,
         "default_setter": "set_input_types"
+    },
+    "inputs": {
+        "meta": {
+            "description": "The index of the each input parameters type in the 'input_types' list in the order they are required for the function call."
+        },
+        "type": "list",
+        "schema": {
+            "type": ["integer"],
+            "min": 0,
+            "max": 255,
+            "check_with": "valid_type_input_index"
+        },
+        "default_setter": "set_input_indices"
     },
     "num_outputs": {
         "meta": {
-            "description": "The number of outputs to the code."
+            "description": "The number of outputs of the genetic code."
         },
         "type": "integer",
         "min": 1,
@@ -352,7 +366,7 @@
     },
     "output_types": {
         "meta": {
-            "description": "GC output type definitions."
+            "description": "The set of types of the outputs in ascending order of type number."
         },
         "type": "list",
         "schema": {
@@ -360,22 +374,65 @@
             "min": -32768,
             "max": 32767,
             "check_with": "valid_type"
-},
+        },
         "default_setter": "set_output_types"
+    },
+    "outputs": {
+        "meta": {
+            "description": "The index of the each output parameters type in the 'output_types' list in the order they are returned from the function call."
+        },
+        "type": "list",
+        "schema": {
+            "type": ["integer"],
+            "min": 0,
+            "max": 255,
+            "check_with": "valid_type_output_index"
+        },
+        "default_setter": "set_output_indices"
     },
     "alpha_class": {
         "meta": {
-            "description": "The classification of the genetic code."
+            "description": "The problem space classification of the genetic code. It is a position in 4 dimensional space where each dimension has a range of -1.0 <= x <= 1.0."
         },
-        "type": "integer",
-        "default": -1
+        "type": "list",
+        "minlength": 4,
+        "maxlength": 4,
+        "schema": {
+            "type": ["float"],
+            "min": 0,
+            "max": 1.0
+        },
+        "default": [0.0, 0.0, 0.0, 0.0]
     },
-    "beta_class": {
+    "_alpha_class": {
         "meta": {
-            "description": "The classification of the genetic code."
+            "description": "The alpha class when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "minlength": 4,
+        "maxlength": 4,
+        "schema": {
+            "type": ["float"],
+            "min": 0,
+            "max": 1.0
+        },
+        "default": [0.0, 0.0, 0.0, 0.0]
+    },
+    "ac_count": {
+        "meta": {
+            "description": "The weight of the genetic code in its current alpha class position."
         },
         "type": "integer",
-        "default": -1
+        "min": 0,
+        "default": 0
+    },
+    "_ac_count": {
+        "meta": {
+            "description": "The ac_count when the genetic code was copied from the higher layer."
+        },
+        "type": "integer",
+        "min": 0,
+        "default": 0
     },
     "properties": {
         "meta": {
@@ -446,7 +503,8 @@
             "min": 0.0,
             "max": 1.0,
             "default": 0.0
-        }
+        },
+        "default": [0.0]
     },
     "_evolvability": {
         "meta": {
@@ -458,29 +516,32 @@
             "min": 0.0,
             "max": 1.0,
             "default": 0.0
-        }
+        },
+        "default": [0.0]
     },
-    "ecount": {
+    "e_count": {
         "meta": {
             "description": "The number of evolvability updates in this genetic codes life time."
         },
         "type": "list",
         "schema": {
             "type": "integer",
-            "min": 1,
-            "default": 1
-        }
+            "min": 0,
+            "default": 0
+        },
+        "default": [0]
     },
-    "_ecount": {
+    "_e_count": {
         "meta": {
             "description": "The count when the genetic code was copied from the higher layer."
         },
         "type": "list",
         "schema": {
             "type": "integer",
-            "min": 1,
-            "default": 1
-        }
+            "min": 0,
+            "default": 0
+        },
+        "default": [0]
     },
     "fitness": {
         "meta": {
@@ -493,7 +554,7 @@
             "max": 1.0,
             "default": 0.0
         },
-        "default": [1.0]
+        "default": [0.0]
     },
     "_fitness": {
         "meta": {
@@ -506,21 +567,21 @@
             "max": 1.0,
             "default": 0.0
         },
-        "default": [1.0]
+        "default": [0.0]
     },
-    "fcount": {
+    "f_count": {
         "meta": {
             "description": "The number of fitness updates in this genetic codes life time."
         },
         "type": "list",
         "schema": {
             "type": "integer",
-            "min": 1,
-            "default": 1
+            "min": 0,
+            "default": 0
         },
-        "default": [1]
+        "default": [0]
     },
-    "_fcount": {
+    "_f_count": {
         "meta": {
             "description": "The count when the genetic code was copied from the higher layer."
         },
@@ -530,7 +591,7 @@
             "min": 0,
             "default": 0
         },
-        "default": [1]
+        "default": [0]
     },
     "creator": {
         "meta": {
@@ -539,12 +600,12 @@
         "type": "string",
         "minlength": 64,
         "maxlength": 64,
-        "regex": "[0-9a-f]{64}",
-        "default": "0000000000000000000000000000000000000000000000000000000000000000"
+        "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        "default": null
     },
     "updated": {
         "meta": {
-            "description": "The date and time of the last modification to this genetic code."
+            "description": "The UTC date and time of the last modification to this genetic code."
         },
         "type": "string",
         "minlength": 27,
@@ -555,7 +616,7 @@
     },
     "created": {
         "meta": {
-            "description": "The date and time of the codes creation. If the genetic code has been created in another microbiome at an earlier time then this field will be updated."
+            "description": "The UTC date and time of the codes creation. If the genetic code has been created in another microbiome at an earlier time then this field will be updated."
         },
         "type": "string",
         "minlength": 27,

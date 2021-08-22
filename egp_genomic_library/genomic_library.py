@@ -6,6 +6,8 @@ from logging import NullHandler, getLogger
 from os.path import dirname, join
 from pprint import pformat
 from zlib import compress, decompress
+from uuid import UUID
+from datetime import datetime
 
 from pypgtable import ID_FUNC, table
 
@@ -16,20 +18,56 @@ _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
-_EVO_UPDATE_RAW = ('SELECT total_weighted_values({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
-                   ', 1.0::DOUBLE PRECISION, 1::BIGINT)')
+_WEIGHTED_VARIABLE_UPDATE_RAW = ('vector_weighted_variable_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
+                   ', 0.0::DOUBLE PRECISION, 0::BIGINT)')
+_WEIGHTED_FIXED_UPDATE_RAW = ('weighted_fixed_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
+                   ', 0.0::DOUBLE PRECISION, 0::BIGINT)')
+_SCALAR_COUNT_UPDATE = '{CSCC} + {PSCC} - {CSPC}'
 _EVO_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{evolvability}',
-    'CSCC': 'EXCLUDED.{count}',
-    'CSPV': 'EXCLUDED.{_evolvability}',
-    'CSPC': 'EXCLUDED.{_count}',
+    'CSCC': 'EXCLUDED.{e_count}',
     'PSCV': '{evolvability}',
-    'PSCC': '{count}'
+    'PSCC': '{e_count}',
+    'CSPV': 'EXCLUDED.{_evolvability}',
+    'CSPC': 'EXCLUDED.{_e_count}'
 }
-_EVO_UPDATE_STR = _EVO_UPDATE_RAW.format(**_EVO_UPDATE_MAP)
-_COUNT_UPDATE_STR = '{count} = total_counts({count}, EXCLUDED.{count}, EXCLUDED.{_count}, 1::BIGINT)'
-_REF_UPDATE_STR = '{references} = total_counts({references}, EXCLUDED.{references}, EXCLUDED.{_references}, 1::BIGINT)'
-_UPDATE_STR = '{updated} = NOW(), ' + _EVO_UPDATE_STR + _COUNT_UPDATE_STR + _REF_UPDATE_STR
+_EVO_UPDATE_STR = '{evolvability} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_EVO_UPDATE_MAP)
+_E_COUNT_UPDATE_STR = '{e_count} = variable_vector_weights_update(EXCLUDED.{e_count}, {e_count}, EXCLUDED.{_e_count}, 1::BIGINT)'
+_FIT_UPDATE_MAP = {
+    'CSCV': 'EXCLUDED.{fitness}',
+    'CSCC': 'EXCLUDED.{f_count}',
+    'PSCV': '{fitness}',
+    'PSCC': '{f_count}',
+    'CSPV': 'EXCLUDED.{_fitness}',
+    'CSPC': 'EXCLUDED.{_f_count}'
+}
+_FIT_UPDATE_STR = '{fitness} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_FIT_UPDATE_MAP)
+_F_COUNT_UPDATE_STR = '{f_count} = variable_vector_weights_update(EXCLUDED.{f_count}, {f_count}, EXCLUDED.{_f_count}, 1::BIGINT)'
+_AC_UPDATE_MAP = {
+    'CSCV': 'EXCLUDED.{alpha_class}',
+    'CSCC': 'EXCLUDED.{ac_count}',
+    'PSCV': '{alpha_class}',
+    'PSCC': '{ac_count}',
+    'CSPV': 'EXCLUDED.{_alpha_class}',
+    'CSPC': 'EXCLUDED.{_ac_count}'
+}
+_AC_UPDATE_STR = '{alpha_class} = ' + _WEIGHTED_FIXED_UPDATE_RAW.format(**_AC_UPDATE_MAP)
+_AC_COUNT_UPDATE_STR = '{ac_count} = ' + _SCALAR_COUNT_UPDATE.format(**_AC_UPDATE_MAP)
+_REF_UPDATE_MAP = {
+    'CSCC': 'EXCLUDED.{references}',
+    'PSCC': '{references}',
+    'CSPC': 'EXCLUDED.{_references}'
+}
+_REF_UPDATE_STR = '{references} = ' + _SCALAR_COUNT_UPDATE.format(**_REF_UPDATE_MAP)
+_UPDATE_STR = ','.join((
+    '{updated} = NOW()',
+    _EVO_UPDATE_STR,
+    _E_COUNT_UPDATE_STR,
+    _FIT_UPDATE_STR,
+    _F_COUNT_UPDATE_STR,
+    _AC_UPDATE_STR,
+    _AC_COUNT_UPDATE_STR,
+    _REF_UPDATE_STR))
 _NULL_GC_DATA = {
     'code_depth': 0,
     'num_codes': 0,
@@ -105,6 +143,46 @@ def str_to_sha256(obj):
     raise TypeError("Un-encodeable type '{}': Expected 'str' or byte type.".format(type(obj)))
 
 
+def str_to_UUID(obj):
+    """Convert a UUID formated string to a UUID object.
+
+    Args
+    ----
+    obj (str): Must be a UUID formated hexadecimal string.
+
+    Returns
+    -------
+    (uuid): UUID representation of the string.
+    """
+    if isinstance(obj, str):
+        return UUID(obj)
+    if isinstance(obj, UUID):
+        return obj
+    if obj is None:
+        return None
+    raise TypeError("Un-encodeable type '{}': Expected 'str' or UUID type.".format(type(obj)))
+
+
+def str_to_datetime(obj):
+    """Convert a datetime formated string to a datetime object.
+
+    Args
+    ----
+    obj (str): Must be a datetime formated string.
+
+    Returns
+    -------
+    (datetime): datetime representation of the string.
+    """
+    if isinstance(obj, str):
+        return datetime.strptime(obj, "%Y-%m-%dT%H:%M:%S.%fZ")
+    if isinstance(obj, datetime):
+        return obj
+    if obj is None:
+        return None
+    raise TypeError("Un-encodeable type '{}': Expected 'str' or datetime type.".format(type(obj)))
+
+
 def sha256_to_str(obj):
     """Convert a bytearray to its lowercase hexadecimal string representation.
 
@@ -117,6 +195,34 @@ def sha256_to_str(obj):
     (str): Lowercase hexadecimal string.
     """
     return None if obj is None else obj.hex()
+
+
+def UUID_to_str(obj):
+    """Convert a UUID to its lowercase hexadecimal string representation.
+
+    Args
+    ----
+    obj (UUID): UUID representation of the string.
+
+    Returns
+    -------
+    (str): Lowercase hexadecimal UUID string.
+    """
+    return None if obj is None else str(obj)
+
+
+def datetime_to_str(obj):
+    """Convert a datetime to its string representation.
+
+    Args
+    ----
+    obj (datetime): datetime representation of the string.
+
+    Returns
+    -------
+    (str): datetime string.
+    """
+    return None if obj is None else obj.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def encode_properties(obj):
@@ -168,14 +274,18 @@ _CONVERSIONS = (
     ('signature', str_to_sha256, ID_FUNC),
     ('gca', str_to_sha256, ID_FUNC),
     ('gcb', str_to_sha256, ID_FUNC),
-    ('ancestor', str_to_sha256, ID_FUNC),
-    ('creator', str_to_sha256, ID_FUNC),
+    ('ancestor_a', str_to_sha256, ID_FUNC),
+    ('ancestor_b', str_to_sha256, ID_FUNC),
+    ('pgc', str_to_sha256, ID_FUNC),
+    ('creator', str_to_UUID, ID_FUNC),
+    ('created', str_to_datetime, ID_FUNC),
+    ('updated', str_to_datetime, ID_FUNC),
     ('properties', encode_properties, decode_properties)
 )
 
 
-# _PROPERTIES must definition the bit position of all the properties listed in
-# the "properties" feild of the entry_format.json definition.
+# _PROPERTIES must define the bit position of all the properties listed in
+# the "properties" field of the entry_format.json definition.
 _PROPERTIES = {
     "extended": 0,
     "constant": 1,
@@ -200,6 +310,8 @@ _PTR_MAP = {
 
 with open(join(dirname(__file__), "formats/table_format.json"), "r") as file_ptr:
     _DB_TABLE_SCHEMA = load(file_ptr)
+_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _DB_TABLE_SCHEMA)))
+_UPDATE_RETURNING_COLS = tuple((x[1:] for x in _HIGHER_LAYER_COLS)) + ('updated', 'created')
 
 
 # The default config
@@ -312,6 +424,8 @@ class genomic_library():
         entries(dict): A dictionary entry['signature']: entry of genetic code dictionaries to be
             stored or updated in the genomic library.
         """
+        # TODO: Need to update references.
+        # TODO: Check consistency for GC's that are already stored.
         gca = _NULL_GC_DATA
         if not entry['gca'] is None:
             if entry['gca'] not in entries.keys():
@@ -424,14 +538,16 @@ class genomic_library():
         ----
         entries (dict(dict)): keys are signatures and dicts are genetic code
             entries. Values will be normalised & updated in place
-            then encoded just for storage.
         """
         self._normalize(entries)
-        for updated_entry in self._library.upsert(entries.values(), _UPDATE_STR, {}, '*'):
+        for_insert = (x for x in filter(lambda x: not x.get('_stored', False), entries.values()))
+        for_update = (x for x in filter(lambda x: x.get('_stored', False), entries.values()))
+        updated_entries = self._library.upsert(for_insert, _UPDATE_STR, {}, _UPDATE_RETURNING_COLS, _HIGHER_LAYER_COLS)
+        updated_entries.extend(self._library.update(for_update, _UPDATE_STR, {}, _UPDATE_RETURNING_COLS))
+        for updated_entry in updated_entries:
             entry = entries[updated_entry['signature']]
             entry.update(updated_entry)
-            entry['_references'] = entry['references']
-            entry['_evolvability'] = entry['evolvability']
-            entry['_count'] = entry['count']
+            for hlk in _HIGHER_LAYER_COLS:
+                entry[hlk] = entry[hlk[1:]]
         for entry in entries:
             entry['_stored'] = True

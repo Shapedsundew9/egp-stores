@@ -14,7 +14,15 @@
         "type": "BYTEA",
         "nullable": true
     },
-    "ancestor": {
+    "ancestor_a": {
+        "type": "BYTEA",
+        "nullable": true
+    },
+    "ancestor_b": {
+        "type": "BYTEA",
+        "nullable": true
+    },
+    "pgc": {
         "type": "BYTEA",
         "nullable": true
     },
@@ -63,6 +71,11 @@
         "type": "INTEGER[]",
         "index": "gin"
     },
+    "inputs": {
+        "nullable": true,
+        "type": "BYTEA",
+        "index": "btree"
+    },
     "num_outputs": {
         "type": "SMALLINT",
         "default": "0"
@@ -72,17 +85,46 @@
         "type": "INTEGER[]",
         "index": "gin"
     },
-    "alpha_class": {
+    "outputs": {
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BYTEA",
+        "index": "btree"
     },
-    "beta_class": {
-        "nullable": true,
-        "type": "BIGINT"
+    "alpha_class": {
+        "type": "DOUBLE PRECISION[4]",
+        "default": "ARRAY[0.0, 0.0, 0.0, 0.0]"
+    },
+    "_alpha_class": {
+        "type": "DOUBLE PRECISION[4]",
+        "default": "ARRAY[0.0, 0.0, 0.0, 0.0]"
+    },
+    "ac_count": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "_ac_count": {
+        "type": "BIGINT",
+        "default": "0"
     },
     "properties": {
         "type": "BIGINT",
         "default": "0"
+    },
+    "fitness": {
+        "type": "DOUBLE PRECISION[]",
+        "default": "ARRAY[0.0]"
+    },
+    "_fitness": {
+        "type": "DOUBLE PRECISION[]",
+        "default": "ARRAY[0.0]"
+    },
+    "f_count": {
+        "type": "BIGINT[]",
+        "default": "ARRAY[0]"
+    },
+    "_f_count": {
+        "type": "BIGINT[]",
+        "default": "ARRAY[0]"
     },
     "evolvability": {
         "type": "DOUBLE PRECISION[]",
@@ -92,16 +134,17 @@
         "type": "DOUBLE PRECISION[]",
         "default": "ARRAY[0.0]"
     },
-    "count": {
-        "type": "BIGINT",
-        "default": "0"
+    "e_count": {
+        "type": "BIGINT[]",
+        "default": "ARRAY[0]"
     },
-    "_count": {
-        "type": "BIGINT",
-        "default": "0"
+    "_e_count": {
+        "type": "BIGINT[]",
+        "default": "ARRAY[0]"
     },
     "creator": {
-        "type": "BYTEA"
+        "type": "UUID",
+        "nullable": true
     },
     "updated": {
         "type": "TIMESTAMP",

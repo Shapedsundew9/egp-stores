@@ -108,6 +108,14 @@ class _entry_validator(Validator):
         if not validate(value):
             self._error(field, 'gc_type {} does not exist.'.format(value))
 
+    def _check_with_valid_type_input_index(self, field, value):
+        # TODO: Check type indices make sense
+        pass
+
+    def _check_with_valid_type_output_index(self, field, value):
+        # TODO: Check type indices make sense
+        pass
+
     def _check_with_valid_inline(self, field, value):
         # TODO: Check right number of return parameters and arguments
         pass
@@ -120,15 +128,29 @@ class _entry_validator(Validator):
         return define_signature(self.document)
 
     def _normalize_default_setter_set_input_types(self, document):
-        # Sort the input endpoints by index then return the types as a list
+        # Gather all the input endpoint types. Reduce in a set then order the list.
+        inputs = []
+        for row in document["graph"].values():
+            inputs.extend((ep[2] for ep in filter(lambda x: x[0] == 'I', row)))
+        return sorted(set(inputs))
+
+    def _normalize_default_setter_set_output_types(self, document):
+        # Gather all the output endpoint types. Reduce in a set then order the list.
+        return sorted(set((ep[2] for ep in document["graph"].get("O", tuple()))))
+
+    def _normalize_default_setter_set_input_indices(self, document):
+        # Get the type list then find all the inputs in order & look them up.
+        type_list = self._normalize_default_setter_set_input_types(document)
         inputs = []
         for row in document["graph"].values():
             inputs.extend((ep for ep in filter(lambda x: x[0] == 'I', row)))
-            inputs.sort(key=lambda x: x[1])
-        return [x[2] for x in inputs]
+        return bytes((type_list.index(ep[2]) for ep in sorted(inputs, key=lambda x:x[1])))
 
-    def _normalize_default_setter_set_output_types(self, document):
-        return [ep[2] for ep in sorted(document["graph"].get("O", tuple()), key=lambda x:x[1])]
+    def _normalize_default_setter_set_output_indices(self, document):
+        # Get the type list then find all the inputs in order & look them up.
+        type_list = self._normalize_default_setter_set_output_types(document)
+        bytea = (type_list.index(ep[2]) for ep in sorted(document["graph"].get("O", tuple()), key=lambda x:x[1]))
+        return bytes(bytea)
 
     def _normalize_default_setter_set_num_inputs(self, document):
         return len(document["graph"].get("I", tuple()))

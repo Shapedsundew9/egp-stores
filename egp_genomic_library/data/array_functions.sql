@@ -1,5 +1,52 @@
 CREATE OR REPLACE FUNCTION
-	total_weighted_values(
+	weighted_fixed_array_update(
+		cscv DOUBLE PRECISION[],
+		cscc BIGINT,
+		pscv DOUBLE PRECISION[],
+		pscc BIGINT,
+		cspv DOUBLE PRECISION[],
+		cspc BIGINT,
+		default_value DOUBLE PRECISION,
+        default_count BIGINT)
+    RETURNS DOUBLE PRECISION[]
+    SET SCHEMA 'public'
+    LANGUAGE plpgsql
+    AS $$
+	DECLARE
+        _len INT = cardinality(cscv);
+		ccw DOUBLE PRECISION[];
+		pcw DOUBLE PRECISION[];
+		ppw DOUBLE PRECISION[];
+		twa DOUBLE PRECISION[];
+		tw DOUBLE PRECISION[];
+		tv DOUBLE PRECISION[];
+		tc BIGINT;
+    BEGIN
+		-- Overall calculation
+		-- result = (CSCV * CSCC + PSCV * PSCC - CSPV * CSPC) / (CSCC + PSCC - CSPC)
+
+		-- ccw = cscv * cscc, pcw = pscv * pscc, ppw = cspv * cspc
+		ccw = array_agg(e.el1 * e.el2) FROM unnest(cscv, array_fill(cscc, ARRAY[_len])) e(el1, el2);
+		pcw = array_agg(e.el1 * e.el2) FROM unnest(pscv, array_fill(pscc, ARRAY[_len])) e(el1, el2);
+		ppw = array_agg(e.el1 * e.el2) FROM unnest(cspv, array_fill(cspc, ARRAY[_len])) e(el1, el2);
+
+		-- twa = ccw + pcw, tw = twa - ppw
+		twa = array_agg(e.el1 + e.el2) FROM unnest(ccw, pcw) e(el1, el2);
+		tw = array_agg(e.el1 - e.el2) FROM unnest(twa, ppw) e(el1, el2);
+
+		-- tc = cscc + pscc - cspc
+		tc = cscc + pscc - cspc;
+
+		-- tv = tw / tc
+		tv = array_agg(e.el1 / e.el2) FROM unnest(tw, array_fill(tc, ARRAY[_len])) e(el1, el2);
+
+		RETURN tv;
+	END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION
+	vector_weighted_variable_array_update(
 		cscv DOUBLE PRECISION[],
 		cscc BIGINT[],
 		pscv DOUBLE PRECISION[],
@@ -71,7 +118,7 @@ $$;
 
 
 CREATE OR REPLACE FUNCTION
-	total_counts(
+	variable_vector_weights_update(
 		cscc BIGINT[],
 		pscc BIGINT[],
 		cspc BIGINT[],

@@ -10,8 +10,8 @@ from pytest import approx
 
 _DEFAULT_VALUE = 1.0
 _DEFAULT_COUNT = 1
-_SQL_STR = ('SELECT total_weighted_values({cscv}, {cscc}, {pscv}, {pscc}, {cspv}, {cspc}'
-            ', 1.0::DOUBLE PRECISION, 1::BIGINT), total_counts({cscc}, {pscc}, {cspc}, 1::BIGINT),'
+_SQL_STR = ('SELECT vector_weighted_variable_array_update({cscv}, {cscc}, {pscv}, {pscc}, {cspv}, {cspc}'
+            ', 1.0::DOUBLE PRECISION, 1::BIGINT), variable_vector_weights_update({cscc}, {pscc}, {cspc}, 1::BIGINT),'
             ' {tv}, {tc} FROM test_table')
 _CONFIG = {
     'database': {
@@ -77,14 +77,14 @@ def _random_pair(length, base=None):
     """
     if base is None:
         values = [random() for _ in range(length)]
-        total_counts = [randint(1, 50000) for _ in range(length)]
+        variable_vector_weights_update = [randint(1, 50000) for _ in range(length)]
     else:
         counts = [randint(1, 50000) for _ in base[1]]
-        total_counts = [b + c for c, b in zip(counts, base[1])]
+        variable_vector_weights_update = [b + c for c, b in zip(counts, base[1])]
         values = [v + (((1 - v) * random()) * c) / (b + c) for c, v, b in zip(counts, base[0], base[1])]
-        total_counts.extend([_DEFAULT_COUNT] * (len(base[0]) - length))
+        variable_vector_weights_update.extend([_DEFAULT_COUNT] * (len(base[0]) - length))
         values.extend([_DEFAULT_VALUE] * (len(base[0]) - length))
-    return values, total_counts
+    return values, variable_vector_weights_update
 
 
 def _random_set(lengths):
