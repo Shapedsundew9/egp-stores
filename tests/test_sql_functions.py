@@ -3,6 +3,8 @@
 from copy import copy, deepcopy
 from os.path import dirname, join
 from random import randint, random
+from json import load
+from os.path import dirname, join
 
 from numpy import all, array, float64, int64
 from pypgtable import table
@@ -55,6 +57,9 @@ _CONFIG = {
     'wait_for_db': False,
     'wait_for_table': False
 }
+
+with open(join(dirname(__file__), "../egp_genomic_library/formats/meta_table_format.json"), "r") as file_ptr:
+    _META_TABLE_SCHEMA = load(file_ptr)
 
 
 def _random_pair(length, base=None):
@@ -303,11 +308,40 @@ def _create_testcases(n):
     return testcases
 
 
+def meta_table_config(config, create=False):
+    """Create the meta table config from the genomic library config.
+
+    Args
+    ----
+    config (dict): pypgtable config of the genomic library.
+    create (bool): If true (re)create the meta data table.
+
+    Returns
+    -------
+    (dict): pypgtable config of the genomic library meta table.
+    """
+    config =  {
+        'table': config['table'] + '_meta',
+        'schema': _META_TABLE_SCHEMA,
+        'database': deepcopy(config['database'])
+    }
+    if create:
+        config['delete_table'] = True
+        config['create_table'] = True
+    return config
+
+
 def test_sql_array_update():
     """Validate the SQL functions match the model."""
+    meta = table(meta_table_config(_CONFIG))
     t = table(_CONFIG)
-    with open(join(dirname(__file__), '../egp_genomic_library/data/array_functions.sql'), 'r') as fileptr:
-        t.arbitrary_sql(fileptr.read())
+    if t.raw.creator:
+        meta = table(meta_table_config(_CONFIG, create=True))
+        with open(join(dirname(__file__), '../egp_genomic_library/data/gl_functions.sql'), 'r') as fileptr:
+            sql_text = fileptr.read()
+            sql_text = sql_text.replace('__meta_table_name__', meta.raw.config['table'])
+            sql_text = sql_text.replace('__gl_table_name__', t.raw.config['table'])
+            t.arbitrary_sql(sql_text)
     t.insert(_create_testcases(300))
     for row in t.arbitrary_sql(_SQL_STR):
         assert(row[0] == approx(row[2]))

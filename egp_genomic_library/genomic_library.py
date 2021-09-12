@@ -8,6 +8,7 @@ from pprint import pformat
 from zlib import compress, decompress
 from uuid import UUID
 from datetime import datetime
+from random import choices
 
 from pypgtable import ID_FUNC, table
 
@@ -309,8 +310,8 @@ _PTR_MAP = {
 
 
 with open(join(dirname(__file__), "formats/table_format.json"), "r") as file_ptr:
-    _DB_TABLE_SCHEMA = load(file_ptr)
-_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _DB_TABLE_SCHEMA)))
+    _GL_TABLE_SCHEMA = load(file_ptr)
+_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _GL_TABLE_SCHEMA)))
 _UPDATE_RETURNING_COLS = tuple((x[1:] for x in _HIGHER_LAYER_COLS)) + ('updated', 'created')
 
 
@@ -321,7 +322,7 @@ _DEFAULT_CONFIG = {
     },
     'table': 'genomic_library',
     'ptr_map': _PTR_MAP,
-    'schema': _DB_TABLE_SCHEMA,
+    'schema': _GL_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
     'conversions': _CONVERSIONS
@@ -365,7 +366,7 @@ class genomic_library():
         """
         self._library = table(config)
         if self._library.raw.creator:
-            with open(join(dirname(__file__), 'data/array_functions.sql'), 'r') as fileptr:
+            with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r') as fileptr:
                 self._library.arbitrary_sql(fileptr.read())
             for data_file in _DATA_FILES:
                 abspath = join(_DATA_FILE_FOLDER, data_file)
@@ -385,6 +386,7 @@ class genomic_library():
         (dict(dict)): All genetic codes & codons constructing & including signature gc.
         """
         return self._library[self._library.encode_value('signature', signature)]
+
 
     def _check_references(self, references, check_list=set()):
         """Verify all the references exist in the genomic library.

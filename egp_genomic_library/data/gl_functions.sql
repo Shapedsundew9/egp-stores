@@ -1,4 +1,36 @@
 CREATE OR REPLACE FUNCTION
+	weighted_fixed_array_inplace_update(
+		csdw BIGINT[],
+		csdc BIGINT[],
+		cspv DOUBLE PRECISION[],
+		cspc BIGINT[])
+    RETURNS DOUBLE PRECISION[]
+    SET SCHEMA 'public'
+    LANGUAGE plpgsql
+    AS $$
+	DECLARE
+		cpw DOUBLE PRECISION[];
+		tw DOUBLE PRECISION[];
+		tv DOUBLE PRECISION[];
+		tc BIGINT;
+    BEGIN
+		-- Overall calculation
+		-- result = (CSPV * CSPC + CSDW) / (CSPC + CSDC)
+
+		-- cpw = cspv * cspc, tw = cpw + csdw, tc = cspc + csdc
+		cpw = array_agg(e.el1 * e.el2) FROM unnest(cscv, cspv) e(el1, el2);
+		tw = array_agg(e.el1 + e.el2) FROM unnest(cpw, csdw) e(el1, el2);
+		tc = array_agg(e.el1 + e.el2) FROM unnest(cspc, csdc) e(el1, el2);
+
+		-- tv = tw / tc
+		tv = array_agg(e.el1 / e.el2) FROM unnest(tw, tc) e(el1, el2);
+
+		RETURN tv;
+	END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION
 	weighted_fixed_array_update(
 		cscv DOUBLE PRECISION[],
 		cscc BIGINT,
@@ -113,6 +145,22 @@ CREATE OR REPLACE FUNCTION
 		tv = array_agg(e.el1 / e.el2) FROM unnest(tw, tc) e(el1, el2);
 
 		RETURN tv;
+	END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION
+	fixed_vector_inplace_weights_update(
+		csdc BIGINT[],
+		cscc BIGINT[])
+    RETURNS BIGINT[]
+    SET SCHEMA 'public'
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+		-- Overall calculation
+		-- result = CSCC + CSDC
+		RETURN array_agg(e.el1 + e.el2) FROM unnest(csdc, cscc) e(el1, el2);
 	END;
 $$;
 
