@@ -8,7 +8,6 @@ from pprint import pformat
 from zlib import compress, decompress
 from uuid import UUID
 from datetime import datetime
-from random import choices
 
 from pypgtable import ID_FUNC, table
 
@@ -27,40 +26,40 @@ _SCALAR_COUNT_UPDATE = '{CSCC} + {PSCC} - {CSPC}'
 _EVO_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{evolvability}',
     'CSCC': 'EXCLUDED.{e_count}',
-    'PSCV': '{evolvability}',
-    'PSCC': '{e_count}',
+    'PSCV': '"__table__".{evolvability}',
+    'PSCC': '"__table__".{e_count}',
     'CSPV': 'EXCLUDED.{_evolvability}',
     'CSPC': 'EXCLUDED.{_e_count}'
 }
 _EVO_UPDATE_STR = '{evolvability} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_EVO_UPDATE_MAP)
-_E_COUNT_UPDATE_STR = '{e_count} = variable_vector_weights_update(EXCLUDED.{e_count}, {e_count}, EXCLUDED.{_e_count}, 1::BIGINT)'
+_E_COUNT_UPDATE_STR = '{e_count} = variable_vector_weights_update(EXCLUDED.{e_count}, "__table__".{e_count}, EXCLUDED.{_e_count}, 1::BIGINT)'
 _FIT_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{fitness}',
     'CSCC': 'EXCLUDED.{f_count}',
-    'PSCV': '{fitness}',
-    'PSCC': '{f_count}',
+    'PSCV': '"__table__".{fitness}',
+    'PSCC': '"__table__".{f_count}',
     'CSPV': 'EXCLUDED.{_fitness}',
     'CSPC': 'EXCLUDED.{_f_count}'
 }
 _FIT_UPDATE_STR = '{fitness} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_FIT_UPDATE_MAP)
-_F_COUNT_UPDATE_STR = '{f_count} = variable_vector_weights_update(EXCLUDED.{f_count}, {f_count}, EXCLUDED.{_f_count}, 1::BIGINT)'
+_F_COUNT_UPDATE_STR = '{f_count} = variable_vector_weights_update(EXCLUDED.{f_count}, "__table__".{f_count}, EXCLUDED.{_f_count}, 1::BIGINT)'
 _AC_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{alpha_class}',
     'CSCC': 'EXCLUDED.{ac_count}',
-    'PSCV': '{alpha_class}',
-    'PSCC': '{ac_count}',
+    'PSCV': '"__table__".{alpha_class}',
+    'PSCC': '"__table__".{ac_count}',
     'CSPV': 'EXCLUDED.{_alpha_class}',
     'CSPC': 'EXCLUDED.{_ac_count}'
 }
 _AC_UPDATE_STR = '{alpha_class} = ' + _WEIGHTED_FIXED_UPDATE_RAW.format(**_AC_UPDATE_MAP)
 _AC_COUNT_UPDATE_STR = '{ac_count} = ' + _SCALAR_COUNT_UPDATE.format(**_AC_UPDATE_MAP)
 _REF_UPDATE_MAP = {
-    'CSCC': 'EXCLUDED.{references}',
-    'PSCC': '{references}',
-    'CSPC': 'EXCLUDED.{_references}'
+    'CSCC': 'EXCLUDED.{reference_count}',
+    'PSCC': '"__table__".{reference_count}',
+    'CSPC': 'EXCLUDED.{_reference_count}'
 }
-_REF_UPDATE_STR = '{references} = ' + _SCALAR_COUNT_UPDATE.format(**_REF_UPDATE_MAP)
-_UPDATE_STR = ','.join((
+_REF_UPDATE_STR = '{reference_count} = ' + _SCALAR_COUNT_UPDATE.format(**_REF_UPDATE_MAP)
+UPDATE_STR = ','.join((
     '{updated} = NOW()',
     _EVO_UPDATE_STR,
     _E_COUNT_UPDATE_STR,
@@ -87,7 +86,7 @@ register_token_code('E03001', 'Entry is not valid: {errors}: {entry}')
 register_token_code('E03002', 'Referenced GC(s) {references} do not exist. Entry:\n{entry}:')
 
 
-def _compress_json(obj):
+def compress_json(obj):
     """Compress a JSON dict object.
 
     Args
@@ -110,7 +109,7 @@ def _compress_json(obj):
     raise TypeError("Un-encodeable type '{}': Expected 'dict' or byte type.".format(type(obj)))
 
 
-def _decompress_json(obj):
+def decompress_json(obj):
     """Decompress a compressed JSON dict object.
 
     Args
@@ -270,8 +269,8 @@ def decode_properties(obj):
 
 
 _CONVERSIONS = (
-    ('graph', _compress_json, _decompress_json),
-    ('meta_data', _compress_json, _decompress_json),
+    ('graph', compress_json, decompress_json),
+    ('meta_data', compress_json, decompress_json),
     ('signature', str_to_sha256, ID_FUNC),
     ('gca', str_to_sha256, ID_FUNC),
     ('gcb', str_to_sha256, ID_FUNC),
@@ -281,7 +280,7 @@ _CONVERSIONS = (
     ('creator', str_to_UUID, ID_FUNC),
     ('created', str_to_datetime, ID_FUNC),
     ('updated', str_to_datetime, ID_FUNC),
-    ('properties', encode_properties, decode_properties)
+    ('properties', encode_properties, ID_FUNC)
 )
 
 
@@ -311,8 +310,8 @@ _PTR_MAP = {
 
 with open(join(dirname(__file__), "formats/table_format.json"), "r") as file_ptr:
     _GL_TABLE_SCHEMA = load(file_ptr)
-_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _GL_TABLE_SCHEMA)))
-_UPDATE_RETURNING_COLS = tuple((x[1:] for x in _HIGHER_LAYER_COLS)) + ('updated', 'created')
+HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _GL_TABLE_SCHEMA)))
+UPDATE_RETURNING_COLS = tuple((x[1:] for x in HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
 
 
 # The default config
@@ -341,6 +340,16 @@ def default_config():
     return deepcopy(_DEFAULT_CONFIG)
 
 
+def sql_functions():
+    """Load the SQL functions used by the genomic library & dependent repositiories of genetic material.
+
+    SQL functions are used to update genetic code entries as they are an easy way to guarantee
+    atomic behaviour.
+    """
+    with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r') as fileptr:
+        return fileptr.read()
+
+
 class genomic_library():
     """Store of genetic codes & associated data.
 
@@ -349,7 +358,7 @@ class genomic_library():
         2. Validating entries to be added to the store.
         3. Providing an application interface to the fields.
 
-    The geneomic library must be self consistent i.e. no entry can reference a genetic code
+    The genomic library must be self consistent i.e. no entry can reference a genetic code
     that is not in the genomic library.
     """
 
@@ -364,15 +373,15 @@ class genomic_library():
         ----
         config(pypgtable config): The config is deep copied by pypgtable.
         """
-        self._library = table(config)
-        if self._library.raw.creator:
-            with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r') as fileptr:
-                self._library.arbitrary_sql(fileptr.read())
+        self.library = table(config)
+        self._update_str = UPDATE_STR.replace('__table__', config['table'])
+        if self.library.raw.creator:
+            self.library.arbitrary_sql(sql_functions())
             for data_file in _DATA_FILES:
                 abspath = join(_DATA_FILE_FOLDER, data_file)
-                _logger.info(text_token({'I03000': {'table': self._library.raw.config['table'], 'file': abspath}}))
+                _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
                 with open(abspath, "r") as file_ptr:
-                    self._library.insert((entry_validator.normalized(entry) for entry in load(file_ptr)))
+                    self.library.insert((entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def __getitem__(self, signature):
         """Recursively select genetic codes starting with 'signature'.
@@ -385,7 +394,7 @@ class genomic_library():
         -------
         (dict(dict)): All genetic codes & codons constructing & including signature gc.
         """
-        return self._library[self._library.encode_value('signature', signature)]
+        return self.library[self.library.encode_value('signature', signature)]
 
 
     def _check_references(self, references, check_list=set()):
@@ -405,7 +414,7 @@ class genomic_library():
         """
         naughty_list = []
         for reference in references:
-            if self._library[reference] is None and reference not in check_list:
+            if self.library[reference] is None and reference not in check_list:
                 naughty_list.append(reference)
             else:
                 check_list.add(reference)
@@ -431,7 +440,7 @@ class genomic_library():
         gca = _NULL_GC_DATA
         if not entry['gca'] is None:
             if entry['gca'] not in entries.keys():
-                if not self._library[entry['gca']]:
+                if not self.library[entry['gca']]:
                     self._logger.error(
                         'entry["gca"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gca']))
                     self._logger.error('Entries signature list: {}'.format(entries.keys()))
@@ -443,7 +452,7 @@ class genomic_library():
         gcb = _NULL_GC_DATA
         if not entry['gcb'] is None:
             if entry['gcb'] not in entries.keys():
-                if not self._library[entry['gcb']]:
+                if not self.library[entry['gcb']]:
                     self._logger.error(
                         'entry["gcb"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gcb']))
                     self._logger.error('Entries signature list: {}'.format(entries.keys()))
@@ -510,7 +519,7 @@ class genomic_library():
         -------
         (obj): Encoded value
         """
-        return self._library.encode_value(column, value)
+        return self.library.encode_value(column, value)
 
     def select(self, query_str='', literals={}):
         """Select genetic codes from the genomic library.
@@ -528,7 +537,7 @@ class genomic_library():
         -------
         (dict(dict)): 'signature' keys with gc values.
         """
-        return self._library.recursive_select(query_str, literals, container='pkdict')
+        return self.library.recursive_select(query_str, literals, container='pkdict')
 
     def upsert(self, entries):
         """Insert or update into the genomic library.
@@ -544,12 +553,12 @@ class genomic_library():
         self._normalize(entries)
         for_insert = (x for x in filter(lambda x: not x.get('_stored', False), entries.values()))
         for_update = (x for x in filter(lambda x: x.get('_stored', False), entries.values()))
-        updated_entries = self._library.upsert(for_insert, _UPDATE_STR, {}, _UPDATE_RETURNING_COLS, _HIGHER_LAYER_COLS)
-        updated_entries.extend(self._library.update(for_update, _UPDATE_STR, {}, _UPDATE_RETURNING_COLS))
+        updated_entries = self.library.upsert(for_insert, self._update_str, {}, UPDATE_RETURNING_COLS, HIGHER_LAYER_COLS)
+        updated_entries.extend(self.library.update(for_update, self._update_str, {}, UPDATE_RETURNING_COLS))
         for updated_entry in updated_entries:
             entry = entries[updated_entry['signature']]
             entry.update(updated_entry)
-            for hlk in _HIGHER_LAYER_COLS:
+            for hlk in HIGHER_LAYER_COLS:
                 entry[hlk] = entry[hlk[1:]]
         for entry in entries:
             entry['_stored'] = True
