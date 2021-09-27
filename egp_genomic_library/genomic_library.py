@@ -324,7 +324,8 @@ _DEFAULT_CONFIG = {
     'schema': _GL_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
-    'conversions': _CONVERSIONS
+    'conversions': _CONVERSIONS,
+    'expand_empty_tuple': True
 }
 
 
@@ -375,6 +376,9 @@ class genomic_library():
         """
         self.library = table(config)
         self._update_str = UPDATE_STR.replace('__table__', config['table'])
+        self.encode_value = self.library.encode_value
+        self.select = self.library.select
+        self.recursive_select = self.library.recursive_select
         if self.library.raw.creator:
             self.library.arbitrary_sql(sql_functions())
             for data_file in _DATA_FILES:
@@ -504,40 +508,6 @@ class genomic_library():
                     'references': problem_references}})))
                 raise ValueError('Genomic library entry invalid.')
 
-    def encode_value(self, column, value):
-        """Encode value using the registered conversion function for column.
-
-        If no conversion function is registered value is returned unchanged.
-        This function is provided to create encoded literals in query functions.
-
-        Args
-        ----
-        column (str): Column name for value.
-        value  (obj): Value to encode.
-
-        Returns
-        -------
-        (obj): Encoded value
-        """
-        return self.library.encode_value(column, value)
-
-    def select(self, query_str='', literals={}):
-        """Select genetic codes from the genomic library.
-
-        The select is done recursively returning all constituent genetic codes and
-        codons.
-
-        Args
-        ----
-        query_str (str): Query SQL: e.g. '{input_types} @> {inputs}'.
-        literals (dict): Keys are labels used in query_str. Values are literals to replace the labels.
-            NOTE: Literal values for encoded columns must be encoded. See encode_value().
-
-        Returns
-        -------
-        (dict(dict)): 'signature' keys with gc values.
-        """
-        return self.library.recursive_select(query_str, literals, container='pkdict')
 
     def upsert(self, entries):
         """Insert or update into the genomic library.
