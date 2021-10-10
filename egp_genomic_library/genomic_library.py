@@ -9,7 +9,7 @@ from zlib import compress, decompress
 from uuid import UUID
 from datetime import datetime
 
-from pypgtable import ID_FUNC, table
+from pypgtable import table
 
 from .entry_validator import entry_validator
 from .utils.text_token import register_token_code, text_token
@@ -271,16 +271,16 @@ def decode_properties(obj):
 _CONVERSIONS = (
     ('graph', compress_json, decompress_json),
     ('meta_data', compress_json, decompress_json),
-    ('signature', str_to_sha256, ID_FUNC),
-    ('gca', str_to_sha256, ID_FUNC),
-    ('gcb', str_to_sha256, ID_FUNC),
-    ('ancestor_a', str_to_sha256, ID_FUNC),
-    ('ancestor_b', str_to_sha256, ID_FUNC),
-    ('pgc', str_to_sha256, ID_FUNC),
-    ('creator', str_to_UUID, ID_FUNC),
-    ('created', str_to_datetime, ID_FUNC),
-    ('updated', str_to_datetime, ID_FUNC),
-    ('properties', encode_properties, ID_FUNC)
+    ('signature', str_to_sha256, None),
+    ('gca', str_to_sha256, None),
+    ('gcb', str_to_sha256, None),
+    ('ancestor_a', str_to_sha256, None),
+    ('ancestor_b', str_to_sha256, None),
+    ('pgc', str_to_sha256, None),
+    ('creator', str_to_UUID, None),
+    ('created', str_to_datetime, None),
+    ('updated', str_to_datetime, None),
+    ('properties', encode_properties, None)
 )
 
 
@@ -380,7 +380,7 @@ class genomic_library():
         self.select = self.library.select
         self.recursive_select = self.library.recursive_select
         if self.library.raw.creator:
-            self.library.arbitrary_sql(sql_functions())
+            self.library.raw.arbitrary_sql(sql_functions(), read=False)
             for data_file in _DATA_FILES:
                 abspath = join(_DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
@@ -523,7 +523,7 @@ class genomic_library():
         self._normalize(entries)
         for_insert = (x for x in filter(lambda x: not x.get('_stored', False), entries.values()))
         for_update = (x for x in filter(lambda x: x.get('_stored', False), entries.values()))
-        updated_entries = self.library.upsert(for_insert, self._update_str, {}, UPDATE_RETURNING_COLS, HIGHER_LAYER_COLS)
+        updated_entries = list(self.library.upsert(for_insert, self._update_str, {}, UPDATE_RETURNING_COLS, HIGHER_LAYER_COLS))
         updated_entries.extend(self.library.update(for_update, self._update_str, {}, UPDATE_RETURNING_COLS))
         for updated_entry in updated_entries:
             entry = entries[updated_entry['signature']]

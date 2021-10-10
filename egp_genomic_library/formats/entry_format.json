@@ -423,16 +423,16 @@
             "description": "The weight of the genetic code in its current alpha class position."
         },
         "type": "integer",
-        "min": 0,
-        "default": 0
+        "min": 1,
+        "default": 1
     },
     "_ac_count": {
         "meta": {
             "description": "The ac_count when the genetic code was copied from the higher layer."
         },
         "type": "integer",
-        "min": 0,
-        "default": 0
+        "min": 1,
+        "default": 1
     },
     "properties": {
         "meta": {
@@ -502,9 +502,9 @@
             "type": "float",
             "min": 0.0,
             "max": 1.0,
-            "default": 0.0
+            "default": 1.0
         },
-        "default": [0.0]
+        "default": [1.0]
     },
     "_evolvability": {
         "meta": {
@@ -515,9 +515,9 @@
             "type": "float",
             "min": 0.0,
             "max": 1.0,
-            "default": 0.0
+            "default": 1.0
         },
-        "default": [0.0]
+        "default": [1.0]
     },
     "e_count": {
         "meta": {
@@ -527,9 +527,9 @@
         "schema": {
             "type": "integer",
             "min": 0,
-            "default": 0
+            "default": 1
         },
-        "default": [0]
+        "default": [1]
     },
     "_e_count": {
         "meta": {
@@ -539,9 +539,9 @@
         "schema": {
             "type": "integer",
             "min": 0,
-            "default": 0
+            "default": 1
         },
-        "default": [0]
+        "default": [1]
     },
     "fitness": {
         "meta": {
@@ -552,9 +552,9 @@
             "type": "float",
             "min": 0.0,
             "max": 1.0,
-            "default": 0.0
+            "default": 1.0
         },
-        "default": [0.0]
+        "default": [1.0]
     },
     "_fitness": {
         "meta": {
@@ -565,9 +565,9 @@
             "type": "float",
             "min": 0.0,
             "max": 1.0,
-            "default": 0.0
+            "default": 1.0
         },
-        "default": [0.0]
+        "default": [1.0]
     },
     "f_count": {
         "meta": {
@@ -577,9 +577,9 @@
         "schema": {
             "type": "integer",
             "min": 0,
-            "default": 0
+            "default": 1
         },
-        "default": [0]
+        "default": [1]
     },
     "_f_count": {
         "meta": {
@@ -589,9 +589,9 @@
         "schema": {
             "type": "integer",
             "min": 0,
-            "default": 0
+            "default": 1
         },
-        "default": [0]
+        "default": [1]
     },
     "creator": {
         "meta": {
