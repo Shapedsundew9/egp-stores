@@ -130,12 +130,12 @@ class _entry_validator(Validator):
         # Gather all the input endpoint types. Reduce in a set then order the list.
         inputs = []
         for row in document["graph"].values():
-            inputs.extend((ep[2] for ep in filter(lambda x: x[0] == 'I', row)))
+            inputs.extend([ep[2] for ep in filter(lambda x: x[0] == 'I', row)])
         return sorted(set(inputs))
 
     def _normalize_default_setter_set_output_types(self, document):
         # Gather all the output endpoint types. Reduce in a set then order the list.
-        return sorted(set((ep[2] for ep in document["graph"].get("O", tuple()))))
+        return sorted(set([ep[2] for ep in document["graph"].get("O", tuple())]))
 
     def _normalize_default_setter_set_input_indices(self, document):
         # Get the type list then find all the inputs in order & look them up.
@@ -152,7 +152,11 @@ class _entry_validator(Validator):
         return bytes(bytea)
 
     def _normalize_default_setter_set_num_inputs(self, document):
-        return len(document["graph"].get("I", tuple()))
+        inputs = set()
+        for row in document["graph"].values():
+            for ep in filter(lambda x:x[0] == 'I', row):
+                inputs.add(ep[1])
+        return len(inputs)
 
     def _normalize_default_setter_set_num_outputs(self, document):
         return len(document["graph"].get("O", tuple()))
