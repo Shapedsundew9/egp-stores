@@ -341,8 +341,8 @@ def test_sql_array_update():
             sql_text = fileptr.read()
             sql_text = sql_text.replace('__meta_table_name__', meta.raw.config['table'])
             sql_text = sql_text.replace('__gl_table_name__', t.raw.config['table'])
-            t.arbitrary_sql(sql_text)
+            t.raw.arbitrary_sql(sql_text, read=False)
     t.insert(_create_testcases(300))
-    for row in t.arbitrary_sql(_SQL_STR):
+    for row in t.raw.arbitrary_sql(_SQL_STR):
         assert(row[0] == approx(row[2]))
         assert(row[1] == row[3])

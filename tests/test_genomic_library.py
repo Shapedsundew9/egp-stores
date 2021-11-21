@@ -21,6 +21,6 @@ def test_select_getitem_encode():
     config['delete_table'] = False
     gl = genomic_library(config)
     library = gl.select()
-    gc = gl[choice(tuple(library.keys()))]
+    gc = gl[choice(tuple(library))['signature']]
     assert gc['generation'] == 0
     assert bytearray(gc['signature']) == gl.encode_value('signature', sha256_to_str(gc['signature']))
