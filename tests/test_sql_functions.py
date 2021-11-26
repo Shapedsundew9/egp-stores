@@ -4,7 +4,6 @@ from copy import copy, deepcopy
 from os.path import dirname, join
 from random import randint, random
 from json import load
-from os.path import dirname, join
 
 from numpy import all, array, float64, int64
 from pypgtable import table
