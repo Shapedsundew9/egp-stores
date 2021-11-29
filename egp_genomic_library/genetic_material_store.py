@@ -94,7 +94,7 @@ class genetic_material_store():
         rel = self.rel
 
         # Add all node that do not already exist & the edges between them & existing nodes
-        gc_list = [gc for gc in gc_iter if not self.graph.has_node(gc[nl])]
+        gc_list = [gc for gc in gc_iter if gc[nl] not in self.graph.nodes]
         self.graph.add_nodes_from(((gc[nl], {_OBJECT: gc}) for gc in gc_list))
         self.graph.add_edges_from(((gc[nl], gc[lel]) for gc in gc_list if gc[lel] is not None))
         self.graph.add_edges_from(((gc[nl], gc[rel]) for gc in gc_list if gc[rel] is not None))
