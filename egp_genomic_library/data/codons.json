@@ -28370,6 +28370,165 @@
     },
     {
         "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "gGC()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": true,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -2
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "mGC()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": true,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -1
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "eGC()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": true,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
             1
         ],
         "evolvability": [
@@ -30474,6 +30633,490 @@
             "memory_modify": false,
             "object_modify": false,
             "physical": false,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].remove_all_connections()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "object": "insert_gc"
+                            }
+                        ],
+                        "inline": "{impt[0]['name']}({i0}, {i1})"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "object": "remove_gc"
+                            }
+                        ],
+                        "inline": "{impt[0]['name']}({i0})"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].add_input()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].remove_input()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].add_output()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].remove_output()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
+            "sequence": false
+        }
+    },
+    {
+        "ecount": [
+            0,
+            1
+        ],
+        "evolvability": [
+            0.0,
+            1.0
+        ],
+        "fcount": [
+            0,
+            1
+        ],
+        "fitness": [
+            0.0,
+            1.0
+        ],
+        "gca": null,
+        "gcb": null,
+        "graph": {
+            "A": [
+                [
+                    "I",
+                    0,
+                    -3
+                ]
+            ],
+            "O": [
+                [
+                    "A",
+                    0,
+                    -3
+                ]
+            ]
+        },
+        "meta_data": {
+            "function": {
+                "python3": {
+                    "0": {
+                        "inline": "{i0}['igraph'].remove_constant()"
+                    }
+                }
+            }
+        },
+        "properties": {
+            "arithmetic": false,
+            "bitwise": false,
+            "boolean": false,
+            "conditional": false,
+            "constant": false,
+            "deterministic": false,
+            "extended": false,
+            "mapping": false,
+            "memory_modify": false,
+            "object_modify": false,
+            "physical": true,
             "sequence": false
         }
     }
