@@ -324,8 +324,7 @@ _DEFAULT_CONFIG = {
     'schema': _GL_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
-    'conversions': _CONVERSIONS,
-    'expand_empty_tuple': True
+    'conversions': _CONVERSIONS
 }
 
 
