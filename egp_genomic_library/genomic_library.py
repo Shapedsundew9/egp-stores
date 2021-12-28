@@ -243,7 +243,7 @@ def encode_properties(obj):
     if isinstance(obj, dict):
         bitfield = 0
         for k, v in filter(lambda x: x[1], obj.items()):
-            bitfield |= 1 << _PROPERTIES[k]
+            bitfield |= PROPERTIES[k]
         return bitfield
     if isinstance(obj, int):
         return obj
@@ -265,7 +265,7 @@ def decode_properties(obj):
     -------
     (dict): Properties dictionary.
     """
-    return {b: bool((1 << f) & obj) for b, f in _PROPERTIES.items()}
+    return {b: bool(f & obj) for b, f in PROPERTIES.items()}
 
 
 _CONVERSIONS = (
@@ -283,22 +283,23 @@ _CONVERSIONS = (
     ('properties', encode_properties, None)
 )
 
-
-# _PROPERTIES must define the bit position of all the properties listed in
+# FIXME: This is duplicated in egp_physics.gc_type. Consider creating a seperate module of
+# field definitions.
+# PROPERTIES must define the bit position of all the properties listed in
 # the "properties" field of the entry_format.json definition.
-_PROPERTIES = {
-    "extended": 0,
-    "constant": 1,
-    "conditional": 2,
-    "deterministic": 3,
-    "memory_modify": 4,
-    "object_modify": 5,
-    "physical": 6,
-    "arithmetic": 16,
-    "logical": 17,
-    "bitwise": 18,
-    "boolean": 19,
-    "sequence": 20
+PROPERTIES = {
+    "extended": 1 << 0,
+    "constant": 1 << 1,
+    "conditional": 1 << 2,
+    "deterministic": 1 << 3,
+    "memory_modify": 1 << 4,
+    "object_modify": 1 << 5,
+    "physical": 1 << 6,
+    "arithmetic": 1 << 16,
+    "logical": 1 << 17,
+    "bitwise": 1 << 18,
+    "boolean": 1 << 19,
+    "sequence": 1 << 20
 }
 
 

@@ -49,7 +49,6 @@ class genetic_material_store():
         list(type(gc[nl])): The path to the selected node. The first element in the list will be nl.
         """
         # Fast access
-        nl = self.nl
         lel = self.lel
         rel = self.rel
 
