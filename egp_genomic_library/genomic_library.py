@@ -8,10 +8,12 @@ from pprint import pformat
 from zlib import compress, decompress
 from uuid import UUID
 from datetime import datetime
+from functools import partial
 
 from pypgtable import table
 
 from .entry_validator import entry_validator
+from .genetic_material_store import genetic_material_store
 from .utils.text_token import register_token_code, text_token
 
 _logger = getLogger(__name__)
@@ -78,6 +80,16 @@ _NULL_GC_DATA = {
 }
 _DATA_FILE_FOLDER = join(dirname(__file__), 'data')
 _DATA_FILES = ['codons.json', 'mutations.json']
+
+
+# Tree structure
+_LEL = 'gca'
+_REL = 'gcb'
+_NL = 'signature'
+_PTR_MAP = {
+    _LEL: _NL,
+    _REL: _NL
+}
 
 
 register_token_code("I03000", "Adding data to table {table} from {file}.")
@@ -351,7 +363,7 @@ def sql_functions():
         return fileptr.read()
 
 
-class genomic_library():
+class genomic_library(genetic_material_store):
     """Store of genetic codes & associated data.
 
     The genomic_library is responsible for:
@@ -374,11 +386,13 @@ class genomic_library():
         ----
         config(pypgtable config): The config is deep copied by pypgtable.
         """
+        super().__init__(node_label=_NL, left_edge_label=_LEL, right_edge_label=_REL)
         self.library = table(config)
         self._update_str = UPDATE_STR.replace('__table__', config['table'])
         self.encode_value = self.library.encode_value
         self.select = self.library.select
         self.recursive_select = self.library.recursive_select
+        self.hl_copy = partial(super().hl_copy, field_names=HIGHER_LAYER_COLS)
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(sql_functions(), read=False)
             for data_file in _DATA_FILES:
@@ -521,14 +535,7 @@ class genomic_library():
             entries. Values will be normalised & updated in place
         """
         self._normalize(entries)
-        for_insert = (x for x in filter(lambda x: not x.get('_stored', False), entries.values()))
-        for_update = (x for x in filter(lambda x: x.get('_stored', False), entries.values()))
-        updated_entries = list(self.library.upsert(for_insert, self._update_str, {}, UPDATE_RETURNING_COLS, HIGHER_LAYER_COLS))
-        updated_entries.extend(self.library.update(for_update, self._update_str, {}, UPDATE_RETURNING_COLS))
+        updated_entries = self.library.upsert(entries.values(), self._update_str, {}, UPDATE_RETURNING_COLS)
         for updated_entry in updated_entries:
             entry = entries[updated_entry['signature']]
             entry.update(updated_entry)
-            for hlk in HIGHER_LAYER_COLS:
-                entry[hlk] = entry[hlk[1:]]
-        for entry in entries:
-            entry['_stored'] = True

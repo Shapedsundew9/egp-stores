@@ -81,6 +81,8 @@ class genetic_material_store():
         Edges are created between each GC added and its GCA & GCB sub-GC's if they are not None.
         Edges are directed from GC to sub-GC.
 
+        NOTE: Assumes all referenced GCs in gc_iter exist in self.graph or are in gc_iter.
+
         gc_count is calculated for all added GC's.
 
         Args
@@ -116,3 +118,25 @@ class genetic_material_store():
                     work_stack.pop()
                     tgc[_GC_COUNT] = left_node[_GC_COUNT] + right_node[_GC_COUNT] + 1
                     tgc[_CODON_COUNT] = 1 if tgc[_GC_COUNT] == 1 else left_node[_CODON_COUNT] + right_node[_CODON_COUNT]
+
+    def hl_copy(self, gcs, field_names):
+        """Copy the higher layer field to the current layer field.
+
+        gc is modified.
+        Current layer fields will be created if they do not exist.
+
+        A higher layer field starts with an underscore '_' and has an underscoreless counterpart.
+        e.g. '_field' and 'field'. The _field holds the value of field when the GC was pulled from
+        the higher layer. i.e. after being pulled from the GMS _field must = field. field can then
+        be modified by the lower layer. NB: Updating the value back intot the GMS is a bit more complex.
+
+        FYI: This is not an automatic step as it deletes information i.e. the lower layer may care what
+        the higher layers higher layer values are.
+
+        Args
+        ----
+        gcs (iter(dict)): Dictionary containing field_names fields (typically a GC)
+        field_names (iter(str)): List of valid higher layer field names. i.e. start with an underscore.
+        """
+        for gc in gcs:
+            gc.update({gc[k]: gc[k[1:]] for k in field_names})
