@@ -369,6 +369,7 @@
             "description": "The set of types of the outputs in ascending order of type number."
         },
         "type": "list",
+        "maxlength": 256,
         "schema": {
             "type": ["integer", "string"],
             "min": -32768,

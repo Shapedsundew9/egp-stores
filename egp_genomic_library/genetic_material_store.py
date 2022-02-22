@@ -128,7 +128,7 @@ class genetic_material_store():
         A higher layer field starts with an underscore '_' and has an underscoreless counterpart.
         e.g. '_field' and 'field'. The _field holds the value of field when the GC was pulled from
         the higher layer. i.e. after being pulled from the GMS _field must = field. field can then
-        be modified by the lower layer. NB: Updating the value back intot the GMS is a bit more complex.
+        be modified by the lower layer. NB: Updating the value back into the GMS is a bit more complex.
 
         FYI: This is not an automatic step as it deletes information i.e. the lower layer may care what
         the higher layers higher layer values are.
@@ -139,4 +139,4 @@ class genetic_material_store():
         field_names (iter(str)): List of valid higher layer field names. i.e. start with an underscore.
         """
         for gc in gcs:
-            gc.update({gc[k]: gc[k[1:]] for k in field_names})
+            gc.update({k: gc[k[1:]] for k in field_names})
