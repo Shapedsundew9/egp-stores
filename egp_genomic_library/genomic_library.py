@@ -20,11 +20,32 @@ _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
+# No longer used but still here just in case of future need.
 _WEIGHTED_VARIABLE_UPDATE_RAW = ('vector_weighted_variable_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
-                   ', 0.0::DOUBLE PRECISION, 0::BIGINT)')
-_WEIGHTED_FIXED_UPDATE_RAW = ('weighted_fixed_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}'
-                   ', 0.0::DOUBLE PRECISION, 0::BIGINT)')
+                   ', 0.0::REAL, 0::INTEGER)')
+_WEIGHTED_FIXED_UPDATE_RAW = ('weighted_fixed_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC})')
 _SCALAR_COUNT_UPDATE = '{CSCC} + {PSCC} - {CSPC}'
+_WEIGHTED_SCALAR_UPDATE = '({CSCV} * {CSCC} + {PSCV} * {PSCC} - {CSPV} * {CSPC}) / ' + _SCALAR_COUNT_UPDATE
+_PGC_EVO_UPDATE_MAP = {
+    'CSCV': 'EXCLUDED.{pgc_evolvability}',
+    'CSCC': 'EXCLUDED.{pgc_e_count}',
+    'PSCV': '"__table__".{pgc_evolvability}',
+    'PSCC': '"__table__".{pgc_e_count}',
+    'CSPV': 'EXCLUDED.{_pgc_evolvability}',
+    'CSPC': 'EXCLUDED.{_pgc_e_count}'
+}
+_PGC_EVO_UPDATE_STR = '{pgc_evolvability} = ' + _WEIGHTED_FIXED_UPDATE_RAW.format(**_PGC_EVO_UPDATE_MAP)
+_PGC_E_COUNT_UPDATE_STR = '{pgc_e_count} = variable_vector_weights_update(EXCLUDED.{pgc_e_count}, "__table__".{pgc_e_count}, EXCLUDED.{_pgc_e_count}, 1::INTEGER)'
+_PGC_FIT_UPDATE_MAP = {
+    'CSCV': 'EXCLUDED.{pgc_fitness}',
+    'CSCC': 'EXCLUDED.{pgc_f_count}',
+    'PSCV': '"__table__".{pgc_fitness}',
+    'PSCC': '"__table__".{pgc_f_count}',
+    'CSPV': 'EXCLUDED.{_pgc_fitness}',
+    'CSPC': 'EXCLUDED.{_pgc_f_count}'
+}
+_PGC_FIT_UPDATE_STR = '{pgc_fitness} = ' + _WEIGHTED_FIXED_UPDATE_RAW.format(**_PGC_FIT_UPDATE_MAP)
+_PGC_F_COUNT_UPDATE_STR = '{pgc_f_count} = variable_vector_weights_update(EXCLUDED.{pgc_f_count}, "__table__".{pgc_f_count}, EXCLUDED.{_pgc_f_count}, 1::INTEGER)'
 _EVO_UPDATE_MAP = {
     'CSCV': 'EXCLUDED.{evolvability}',
     'CSCC': 'EXCLUDED.{e_count}',
@@ -33,28 +54,8 @@ _EVO_UPDATE_MAP = {
     'CSPV': 'EXCLUDED.{_evolvability}',
     'CSPC': 'EXCLUDED.{_e_count}'
 }
-_EVO_UPDATE_STR = '{evolvability} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_EVO_UPDATE_MAP)
-_E_COUNT_UPDATE_STR = '{e_count} = variable_vector_weights_update(EXCLUDED.{e_count}, "__table__".{e_count}, EXCLUDED.{_e_count}, 1::BIGINT)'
-_FIT_UPDATE_MAP = {
-    'CSCV': 'EXCLUDED.{fitness}',
-    'CSCC': 'EXCLUDED.{f_count}',
-    'PSCV': '"__table__".{fitness}',
-    'PSCC': '"__table__".{f_count}',
-    'CSPV': 'EXCLUDED.{_fitness}',
-    'CSPC': 'EXCLUDED.{_f_count}'
-}
-_FIT_UPDATE_STR = '{fitness} = ' + _WEIGHTED_VARIABLE_UPDATE_RAW.format(**_FIT_UPDATE_MAP)
-_F_COUNT_UPDATE_STR = '{f_count} = variable_vector_weights_update(EXCLUDED.{f_count}, "__table__".{f_count}, EXCLUDED.{_f_count}, 1::BIGINT)'
-_AC_UPDATE_MAP = {
-    'CSCV': 'EXCLUDED.{alpha_class}',
-    'CSCC': 'EXCLUDED.{ac_count}',
-    'PSCV': '"__table__".{alpha_class}',
-    'PSCC': '"__table__".{ac_count}',
-    'CSPV': 'EXCLUDED.{_alpha_class}',
-    'CSPC': 'EXCLUDED.{_ac_count}'
-}
-_AC_UPDATE_STR = '{alpha_class} = ' + _WEIGHTED_FIXED_UPDATE_RAW.format(**_AC_UPDATE_MAP)
-_AC_COUNT_UPDATE_STR = '{ac_count} = ' + _SCALAR_COUNT_UPDATE.format(**_AC_UPDATE_MAP)
+_EVO_UPDATE_STR = '{evolvability} = ' + _WEIGHTED_SCALAR_UPDATE.format(**_EVO_UPDATE_MAP)
+_EVO_COUNT_UPDATE_STR = '{e_count} = ' + _SCALAR_COUNT_UPDATE.format(**_EVO_UPDATE_MAP)
 _REF_UPDATE_MAP = {
     'CSCC': 'EXCLUDED.{reference_count}',
     'PSCC': '"__table__".{reference_count}',
@@ -63,12 +64,12 @@ _REF_UPDATE_MAP = {
 _REF_UPDATE_STR = '{reference_count} = ' + _SCALAR_COUNT_UPDATE.format(**_REF_UPDATE_MAP)
 UPDATE_STR = ','.join((
     '{updated} = NOW()',
+    _PGC_EVO_UPDATE_STR,
+    _PGC_E_COUNT_UPDATE_STR,
+    _PGC_FIT_UPDATE_STR,
+    _PGC_F_COUNT_UPDATE_STR,
     _EVO_UPDATE_STR,
-    _E_COUNT_UPDATE_STR,
-    _FIT_UPDATE_STR,
-    _F_COUNT_UPDATE_STR,
-    _AC_UPDATE_STR,
-    _AC_COUNT_UPDATE_STR,
+    _EVO_COUNT_UPDATE_STR,
     _REF_UPDATE_STR))
 _NULL_GC_DATA = {
     'code_depth': 0,

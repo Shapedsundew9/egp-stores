@@ -68,7 +68,7 @@
     },
     "input_types": {
         "nullable": true,
-        "type": "INTEGER[]",
+        "type": "SMALLINT[]",
         "index": "gin"
     },
     "inputs": {
@@ -82,7 +82,7 @@
     },
     "output_types": {
         "nullable": true,
-        "type": "INTEGER[]",
+        "type": "SMALLINT[]",
         "index": "gin"
     },
     "outputs": {
@@ -91,18 +91,10 @@
         "index": "btree"
     },
     "alpha_class": {
-        "type": "DOUBLE PRECISION[4]",
-        "default": "ARRAY[0.0, 0.0, 0.0, 0.0]"
-    },
-    "_alpha_class": {
-        "type": "DOUBLE PRECISION[4]",
+        "type": "REAL[4]",
         "default": "ARRAY[0.0, 0.0, 0.0, 0.0]"
     },
     "ac_count": {
-        "type": "BIGINT",
-        "default": "0"
-    },
-    "_ac_count": {
         "type": "BIGINT",
         "default": "0"
     },
@@ -110,37 +102,53 @@
         "type": "BIGINT",
         "default": "0"
     },
-    "fitness": {
-        "type": "DOUBLE PRECISION[]",
-        "default": "ARRAY[0.0]"
+    "pgc_fitness": {
+        "nullable": true,
+        "type": "REAL[16]"
     },
-    "_fitness": {
-        "type": "DOUBLE PRECISION[]",
-        "default": "ARRAY[0.0]"
+    "_pgc_fitness": {
+        "nullable": true,
+        "type": "REAL[16]"
     },
-    "f_count": {
-        "type": "BIGINT[]",
-        "default": "ARRAY[0]"
+    "pgc_f_count": {
+        "nullable": true,
+        "type": "INTEGER[16]"
     },
-    "_f_count": {
-        "type": "BIGINT[]",
-        "default": "ARRAY[0]"
+    "_pgc_f_count": {
+        "nullable": true,
+        "type": "INTEGER[16]"
     },
-    "evolvability": {
-        "type": "DOUBLE PRECISION[]",
-        "default": "ARRAY[0.0]"
+    "pgc_evolvability": {
+        "nullable": true,
+        "type": "REAL[16]"
     },
-    "_evolvability": {
-        "type": "DOUBLE PRECISION[]",
-        "default": "ARRAY[0.0]"
+    "_pgc_evolvability": {
+        "nullable": true,
+        "type": "REAL[16]"
+    },
+    "pgc_e_count": {
+        "nullable": true,
+        "type": "INTEGER[16]"
+    },
+    "_pgc_e_count": {
+        "nullable": true,
+        "type": "INTEGER[16]"
     },
     "e_count": {
-        "type": "BIGINT[]",
-        "default": "ARRAY[0]"
+        "default": "0",
+        "type": "INTEGER"
+    },
+    "evolvability": {
+        "default": "0.0",
+        "type": "REAL"
     },
     "_e_count": {
-        "type": "BIGINT[]",
-        "default": "ARRAY[0]"
+        "default": "0",
+        "type": "INTEGER"
+    },
+    "_evolvability": {
+        "default": "0.0",
+        "type": "REAL"
     },
     "creator": {
         "type": "UUID",

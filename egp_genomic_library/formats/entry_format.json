@@ -498,101 +498,143 @@
         "meta": {
             "description": "A measure of success of the genetic codes descendants. The higher the better."
         },
-        "type": "list",
-        "schema": {
-            "type": "float",
-            "min": 0.0,
-            "max": 1.0,
-            "default": 1.0
-        },
-        "default": [1.0]
+        "type": "float",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0
     },
     "_evolvability": {
         "meta": {
             "description": "The evolvability when the genetic code was copied from the higher layer."
         },
-        "type": "list",
-        "schema": {
-            "type": "float",
-            "min": 0.0,
-            "max": 1.0,
-            "default": 1.0
-        },
-        "default": [1.0]
+        "type": "float",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0
     },
     "e_count": {
         "meta": {
             "description": "The number of evolvability updates in this genetic codes life time."
         },
-        "type": "list",
-        "schema": {
-            "type": "integer",
-            "min": 0,
-            "default": 1
-        },
-        "default": [1]
+        "type": "integer",
+        "min": 0,
+        "default": 0
     },
     "_e_count": {
         "meta": {
             "description": "The count when the genetic code was copied from the higher layer."
         },
-        "type": "list",
-        "schema": {
-            "type": "integer",
-            "min": 0,
-            "default": 1
-        },
-        "default": [1]
+        "type": "integer",
+        "min": 0,
+        "default": 0
     },
-    "fitness": {
+    "pgc_evolvability": {
         "meta": {
-            "description": "A measure of success of the genetic code. The higher the better."
+            "description": "A measure of success of the genetic codes descendants. The higher the better."
         },
         "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
         "schema": {
             "type": "float",
             "min": 0.0,
-            "max": 1.0,
-            "default": 1.0
-        },
-        "default": [1.0]
+            "max": 1.0
+        }
     },
-    "_fitness": {
+    "_pgc_evolvability": {
         "meta": {
-            "description": "The fitness when the genetic code was copied from the higher layer."
+            "description": "The evolvability when the genetic code was copied from the higher layer."
         },
         "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
         "schema": {
             "type": "float",
             "min": 0.0,
-            "max": 1.0,
-            "default": 1.0
-        },
-        "default": [1.0]
+            "max": 1.0
+        }
     },
-    "f_count": {
+    "pgc_e_count": {
         "meta": {
-            "description": "The number of fitness updates in this genetic codes life time."
+            "description": "The number of evolvability updates in this genetic codes life time."
         },
         "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
         "schema": {
             "type": "integer",
-            "min": 0,
-            "default": 1
-        },
-        "default": [1]
+            "min": 0
+        }
     },
-    "_f_count": {
+    "_pgc_e_count": {
         "meta": {
             "description": "The count when the genetic code was copied from the higher layer."
         },
         "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
         "schema": {
             "type": "integer",
-            "min": 0,
-            "default": 1
+            "min": 0
+        }
+    },
+    "pgc_fitness": {
+        "meta": {
+            "description": "A measure of success of the genetic code. The higher the better."
         },
-        "default": [1]
+        "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0
+        }
+    },
+    "_pgc_fitness": {
+        "meta": {
+            "description": "The fitness when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
+        "schema": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0
+        }
+    },
+    "pgc_f_count": {
+        "meta": {
+            "description": "The number of fitness updates in this genetic codes life time."
+        },
+        "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
+        "schema": {
+            "type": "integer",
+            "min": 0
+        }
+    },
+    "_pgc_f_count": {
+        "meta": {
+            "description": "The count when the genetic code was copied from the higher layer."
+        },
+        "type": "list",
+        "minlength": 16,
+        "maxlength": 16,
+        "nullable": true,
+        "schema": {
+            "type": "integer",
+            "min": 0
+        }
     },
     "creator": {
         "meta": {

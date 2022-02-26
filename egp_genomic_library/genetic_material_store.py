@@ -5,7 +5,7 @@ The GMS is a abstract base class for retrieving genetic codes.
 
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
-from networkx import MultiDiGraph, union, spring_layout, relabel_nodes, get_node_attributes
+from networkx import DiGraph, union, spring_layout, relabel_nodes, get_node_attributes
 
 
 # Logging
@@ -28,7 +28,7 @@ class genetic_material_store():
         self.nl = node_label
         self.lel = left_edge_label
         self.rel = right_edge_label
-        self.graph = MultiDiGraph()
+        self.graph = DiGraph()
 
     def select(self):
         raise NotImplementedError
@@ -74,6 +74,37 @@ class genetic_material_store():
 
         return path
 
+    def remove_nodes(self, nl_iter):
+        """Remove nodes recursively from the graph.
+
+        If a node in the gc_iter has no incoming connections then it is removed from the graph along
+        with all edges eminating from it. If that removes all incoming edges from another node then
+        that node is also removed.
+
+        Args
+        ----
+        nl_iter(iter(nl)): The list of GC node labels to remove if not the destination of an edge.
+
+        Returns
+        -------
+        list(gc[nl]): The list of GC node labels actually deleted.
+        """
+        # All the nodes that exist in the graph and have no incoming edges
+        nl_list = [nl for nl in nl_iter if nl in self.graph.nodes and self.graph.in_degree(nl)]
+
+        # Use a while loop so we can add to it
+        victims = set()
+        while nl_list:
+            nl = nl_list.pop(0)
+            victims.add(nl)
+            for _, v in self.graph.out_edges(nl):
+                if self.graph.in_degree(v) == 1:
+                    nl_list.append(v)
+
+        # Remove all the victims
+        self.graph.remove_nodes_from(victims)
+        return victims
+
     def add_nodes(self, gc_iter):
         """Add a GC nodes to the GMS graph.
 
@@ -94,7 +125,7 @@ class genetic_material_store():
         lel = self.lel
         rel = self.rel
 
-        # Add all node that do not already exist & the edges between them & existing nodes
+        # Add all nodes that do not already exist & the edges between them & existing nodes
         gc_list = [gc for gc in gc_iter if gc[nl] not in self.graph.nodes]
         self.graph.add_nodes_from(((gc[nl], {_OBJECT: gc}) for gc in gc_list))
         self.graph.add_edges_from(((gc[nl], gc[lel]) for gc in gc_list if gc[lel] is not None))
