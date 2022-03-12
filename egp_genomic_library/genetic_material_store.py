@@ -135,6 +135,8 @@ class genetic_material_store():
         # GC count is the number of nodes in the sub-tree including the root node.
         for gc in gc_list:
             work_stack = [gc]
+            if _LOG_DEBUG:
+                _logger.debug(f'Adding node {gc[nl]}. Work stack depth 1.')
             while work_stack:
                 tgc = work_stack[-1]
                 tgc_lel = tgc[lel]
@@ -143,12 +145,18 @@ class genetic_material_store():
                 right_node = self.graph.nodes[tgc[rel]][_OBJECT] if tgc_rel is not None else _ZERO_GC_COUNT
                 if _GC_COUNT not in left_node:
                     work_stack.append(left_node)
+                    if _LOG_DEBUG:
+                        _logger.debug(f'Adding node left {left_node[nl]}, work_stack length {len(work_stack)}.')
                 elif _GC_COUNT not in right_node:
                     work_stack.append(right_node)
+                    if _LOG_DEBUG:
+                        _logger.debug(f'Adding node right {right_node[nl]}, work_stack length {len(work_stack)}.')
                 else:
                     work_stack.pop()
                     tgc[_GC_COUNT] = left_node[_GC_COUNT] + right_node[_GC_COUNT] + 1
                     tgc[_CODON_COUNT] = 1 if tgc[_GC_COUNT] == 1 else left_node[_CODON_COUNT] + right_node[_CODON_COUNT]
+                    if _LOG_DEBUG:
+                        _logger.debug(f'Leaf node popped {tgc[nl]}, work_stack length {len(work_stack)}, count {tgc[_GC_COUNT]}.')
 
     def hl_copy(self, gcs, field_names):
         """Copy the higher layer field to the current layer field.

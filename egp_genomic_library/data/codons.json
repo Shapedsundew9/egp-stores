@@ -26771,7 +26771,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].remove_all_connections()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_remove_all_connections",
+                                "object": "gc_remove_all_connections"
+                            }
+                        ],
+                        "inline": "gc_remove_all_connections(_GMS, {i0})"
                     }
                 }
             }
@@ -27262,7 +27269,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].add_input()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_add_input",
+                                "object": "gc_add_input"
+                            }
+                        ],
+                        "inline": "gc_add_input(_GMS, {i0})"
                     }
                 }
             }
@@ -27377,7 +27391,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].remove_input()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_remove_input",
+                                "object": "gc_remove_input"
+                            }
+                        ],
+                        "inline": "gc_remove_input(_GMS, {i0})"
                     }
                 }
             }
@@ -27492,7 +27513,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].add_output()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_add_output",
+                                "object": "gc_add_output"
+                            }
+                        ],
+                        "inline": "gc_add_output(_GMS, {i0})"
                     }
                 }
             }
@@ -27607,7 +27635,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].remove_output()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_remove_output",
+                                "object": "gc_remove_output"
+                            }
+                        ],
+                        "inline": "gc_remove_output(_GMS, {i0})"
                     }
                 }
             }
@@ -27722,7 +27757,14 @@
             "function": {
                 "python3": {
                     "0": {
-                        "inline": "{i0}['igraph'].remove_constant()"
+                        "imports": [
+                            {
+                                "module": "egp_physics.physics",
+                                "name": "gc_remove_constant",
+                                "object": "gc_remove_constant"
+                            }
+                        ],
+                        "inline": "gc_remove_constant(_GMS, {i0})"
                     }
                 }
             }
