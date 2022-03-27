@@ -2,8 +2,6 @@
 
 import pytest
 from random import choice
-from collections import Counter
-from statistics import stdev
 from os.path import dirname, join
 from json import load
 from logging import NullHandler, getLogger

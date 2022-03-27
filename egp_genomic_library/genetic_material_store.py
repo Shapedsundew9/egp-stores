@@ -5,7 +5,9 @@ The GMS is a abstract base class for retrieving genetic codes.
 
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
-from networkx import DiGraph, union, spring_layout, relabel_nodes, get_node_attributes
+from networkx import DiGraph
+from hashlib import sha256
+from pprint import pformat
 
 
 # Logging
@@ -19,6 +21,33 @@ _GC_COUNT = 'gc_count'
 _CODON_COUNT = 'num_codons'
 _OBJECT = 'object'
 _ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0}
+
+
+def define_signature(gc):
+    """Define the signature of a genetic code.
+
+    The signature for a codon GC is slightly different to a regular GC.
+
+    Args
+    ----
+    gc(dict): Must at least be an mCodon.
+
+    Returns
+    -------
+    (str): Lowercase hex SHA256 string.
+    """
+    # NOTE: This needs to be very specific and stand the test of time!
+    gca_hex = '0' * 64 if gc['gca'] is None else gc['gca']
+    gcb_hex = '0' * 64 if gc['gcb'] is None else gc['gcb']
+    string = pformat(gc['graph'], indent=0, sort_dicts=True, width=65535, compact=True) + gca_hex + gcb_hex
+
+    # If it is a codon glue on the mandatory definition
+    if "generation" in gc and gc["generation"] == 0:
+        if "meta_data" in gc and "function" in gc["meta_data"]:
+            string += gc["meta_data"]["function"]["python3"]["0"]["inline"]
+            if 'code' in gc["meta_data"]["function"]["python3"]["0"]:
+                string += gc["meta_data"]["function"]["python3"]["0"]["code"]
+    return sha256(string.encode()).hexdigest()
 
 
 class genetic_material_store():
@@ -179,3 +208,101 @@ class genetic_material_store():
         """
         for gc in gcs:
             gc.update({k: gc[k[1:]] for k in field_names})
+
+"""
+Some benchmarking on SHA256 generation
+======================================
+Python 3.8.5
+
+>>> def a():
+...     start = time()
+...     for _ in range(10000000): int(sha256("".join(string.split()).encode()).hexdigest(), 16)
+...     print(time() - start)
+...
+>>> a()
+8.618626356124878
+>>> def b():
+...     start = time()
+...     for _ in range(10000000): int.from_bytes(sha256("".join(string.split()).encode()).digest(), 'big')
+...     print(time() - start)
+...
+>>> b()
+7.211490631103516
+>>> def c():
+...     start = time()
+...     for _ in range(10000000): sha256("".join(string.split()).encode()).hexdigest()
+...     print(time() - start)
+...
+>>> c()
+6.463267803192139
+>>> def d():
+...     start = time()
+...     for _ in range(10000000): sha256("".join(string.split()).encode()).digest()
+...     print(time() - start)
+...
+>>> d()
+6.043259143829346
+>>> def e():
+...     start = time()
+...     for _ in range(10000000): {sha256("".join(string.split()).encode()).digest(): "Test"}
+...     print(time() - start)
+...
+>>> e()
+6.640311002731323
+>>> def f():
+...     start = time()
+...     for _ in range(10000000): {int.from_bytes(sha256("".join(string.split()).encode()).digest(), 'big'): "Test"}
+...     print(time() - start)
+...
+>>> f()
+7.6320412158966064
+>>> def g():
+...     start = time()
+...     for _ in range(10000000): {sha256("".join(string.split()).encode()).hexdigest(): "Test"}
+...     print(time() - start)
+...
+>>> g()
+7.144319295883179
+>>> def h1():
+...     start = time()
+...     for _ in range(10000000): getrandbits(256)
+...     print(time() - start)
+...
+>>> h1()
+1.0232288837432861
+>>> def h2():
+...     start = time()
+...     for _ in range(10000000): getrandbits(128)
+...     print(time() - start)
+...
+>>> h2()
+0.8551476001739502
+>>> def h3():
+...     start = time()
+...     for _ in range(10000000): getrandbits(64)
+...     print(time() - start)
+...
+>>> h3()
+0.764052152633667
+>>> def i():
+...     start = time()
+...     for _ in range(10000000): getrandbits(256).to_bytes(32, 'big')
+...     print(time() - start)
+...
+>>> i()
+2.038336753845215
+"""
+
+
+"""
+Some Benchmarking on hashing SHA256
+===================================
+Python 3.8.5
+
+>>> a =tuple( (getrandbits(256).to_bytes(32, 'big') for _ in range(10000000)))
+>>> b =tuple( (int(getrandbits(63)) for _ in range(10000000)))
+>>> start = time(); c=set(a); print(time() - start)
+1.8097834587097168
+>>> start = time(); d=set(b); print(time() - start)
+1.0908379554748535
+"""

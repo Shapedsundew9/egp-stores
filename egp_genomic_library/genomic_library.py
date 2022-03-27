@@ -12,7 +12,7 @@ from functools import partial
 
 from pypgtable import table
 
-from .entry_validator import entry_validator
+from .gl_json_entry_validator import entry_validator
 from .genetic_material_store import genetic_material_store
 from .utils.text_token import register_token_code, text_token
 
