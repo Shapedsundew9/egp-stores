@@ -1,13 +1,14 @@
-"""Genetic Material Store
+"""Genetic Material Store.
 
 The GMS is a abstract base class for retrieving genetic codes.
 """
 
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
+# TODO: Move to graph_tool for efficiency
 from networkx import DiGraph
-from hashlib import sha256
-from pprint import pformat
+from json import load
+from os.path import dirname, join
 
 
 # Logging
@@ -17,40 +18,19 @@ _LOG_DEBUG = _logger.isEnabledFor(DEBUG)
 
 
 # Constants
-_GC_COUNT = 'gc_count'
+_GC_COUNT = 'num_codes'
 _CODON_COUNT = 'num_codons'
 _OBJECT = 'object'
 _ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0}
 
 
-def define_signature(gc):
-    """Define the signature of a genetic code.
-
-    The signature for a codon GC is slightly different to a regular GC.
-
-    Args
-    ----
-    gc(dict): Must at least be an mCodon.
-
-    Returns
-    -------
-    (str): Lowercase hex SHA256 string.
-    """
-    # NOTE: This needs to be very specific and stand the test of time!
-    gca_hex = '0' * 64 if gc['gca'] is None else gc['gca']
-    gcb_hex = '0' * 64 if gc['gcb'] is None else gc['gcb']
-    string = pformat(gc['graph'], indent=0, sort_dicts=True, width=65535, compact=True) + gca_hex + gcb_hex
-
-    # If it is a codon glue on the mandatory definition
-    if "generation" in gc and gc["generation"] == 0:
-        if "meta_data" in gc and "function" in gc["meta_data"]:
-            string += gc["meta_data"]["function"]["python3"]["0"]["inline"]
-            if 'code' in gc["meta_data"]["function"]["python3"]["0"]:
-                string += gc["meta_data"]["function"]["python3"]["0"]["code"]
-    return sha256(string.encode()).hexdigest()
+# Data schema
+with open(join(dirname(__file__), "formats/gms_table_format.json"), "r") as file_ptr:
+    GMS_TABLE_SCHEMA = load(file_ptr)
 
 
 class genetic_material_store():
+    """Base class for all genetic material stores."""
 
     def __init__(self, node_label='ref', left_edge_label='gca_ref', right_edge_label='gcb_ref'):
         """Define the keys used to build the GC graph."""
@@ -60,6 +40,7 @@ class genetic_material_store():
         self.graph = DiGraph()
 
     def select(self):
+        """Select method required for all GMSs."""
         raise NotImplementedError
 
     def random_descendant(self, node_label):

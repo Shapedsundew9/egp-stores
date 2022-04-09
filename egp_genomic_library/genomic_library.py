@@ -1,20 +1,19 @@
 """The Genomic Library class wraps the database_table."""
 
 from copy import deepcopy
-from json import dumps, load, loads
+from json import load
 from logging import NullHandler, getLogger
 from os.path import dirname, join
 from pprint import pformat
-from zlib import compress, decompress
-from uuid import UUID
-from datetime import datetime
 from functools import partial
 
 from pypgtable import table
 
-from .gl_json_entry_validator import entry_validator
-from .genetic_material_store import genetic_material_store
+from .gl_json_entry_validator import entry_validator, merge
+from .genetic_material_store import genetic_material_store, GMS_TABLE_SCHEMA
 from .utils.text_token import register_token_code, text_token
+from .conversions import *
+
 
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -99,221 +98,22 @@ register_token_code('E03001', 'Entry is not valid: {errors}: {entry}')
 register_token_code('E03002', 'Referenced GC(s) {references} do not exist. Entry:\n{entry}:')
 
 
-def compress_json(obj):
-    """Compress a JSON dict object.
-
-    Args
-    ----
-    obj (dict): Must be a JSON compatible dict.
-
-    Returns
-    -------
-    (bytes): zlib compressed JSON string.
-    """
-    # TODO: Since the vast majority of data looks the same but is broken into many objects
-    # it would be more efficient to use a compression algorithm that does not embedded the
-    # compression token dictionary.
-    if isinstance(obj, dict):
-        return compress(dumps(obj).encode())
-    if isinstance(obj, memoryview) or isinstance(obj, bytearray) or isinstance(obj, bytes):
-        return obj
-    if obj is None:
-        return None
-    raise TypeError("Un-encodeable type '{}': Expected 'dict' or byte type.".format(type(obj)))
-
-
-def decompress_json(obj):
-    """Decompress a compressed JSON dict object.
-
-    Args
-    ----
-    obj (bytes): zlib compressed JSON string.
-
-    Returns
-    -------
-    (dict): JSON dict.
-    """
-    return None if obj is None else loads(decompress(obj).decode())
-
-
-def str_to_sha256(obj):
-    """Convert a hexidecimal string to a bytearray.
-
-    Args
-    ----
-    obj (str): Must be a hexadecimal string.
-
-    Returns
-    -------
-    (bytearray): bytearray representation of the string.
-    """
-    if isinstance(obj, str):
-        return bytearray.fromhex(obj)
-    if isinstance(obj, memoryview) or isinstance(obj, bytearray) or isinstance(obj, bytes):
-        return obj
-    if obj is None:
-        return None
-    raise TypeError("Un-encodeable type '{}': Expected 'str' or byte type.".format(type(obj)))
-
-
-def str_to_UUID(obj):
-    """Convert a UUID formated string to a UUID object.
-
-    Args
-    ----
-    obj (str): Must be a UUID formated hexadecimal string.
-
-    Returns
-    -------
-    (uuid): UUID representation of the string.
-    """
-    if isinstance(obj, str):
-        return UUID(obj)
-    if isinstance(obj, UUID):
-        return obj
-    if obj is None:
-        return None
-    raise TypeError("Un-encodeable type '{}': Expected 'str' or UUID type.".format(type(obj)))
-
-
-def str_to_datetime(obj):
-    """Convert a datetime formated string to a datetime object.
-
-    Args
-    ----
-    obj (str): Must be a datetime formated string.
-
-    Returns
-    -------
-    (datetime): datetime representation of the string.
-    """
-    if isinstance(obj, str):
-        return datetime.strptime(obj, "%Y-%m-%dT%H:%M:%S.%fZ")
-    if isinstance(obj, datetime):
-        return obj
-    if obj is None:
-        return None
-    raise TypeError("Un-encodeable type '{}': Expected 'str' or datetime type.".format(type(obj)))
-
-
-def sha256_to_str(obj):
-    """Convert a bytearray to its lowercase hexadecimal string representation.
-
-    Args
-    ----
-    obj (bytearray): bytearray representation of the string.
-
-    Returns
-    -------
-    (str): Lowercase hexadecimal string.
-    """
-    return None if obj is None else obj.hex()
-
-
-def UUID_to_str(obj):
-    """Convert a UUID to its lowercase hexadecimal string representation.
-
-    Args
-    ----
-    obj (UUID): UUID representation of the string.
-
-    Returns
-    -------
-    (str): Lowercase hexadecimal UUID string.
-    """
-    return None if obj is None else str(obj)
-
-
-def datetime_to_str(obj):
-    """Convert a datetime to its string representation.
-
-    Args
-    ----
-    obj (datetime): datetime representation of the string.
-
-    Returns
-    -------
-    (str): datetime string.
-    """
-    return None if obj is None else obj.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-
-def encode_properties(obj):
-    """Encode the properties dictionary into its integer representation.
-
-    The properties field is a dictionary of properties to boolean values. Each
-    property maps to a specific bit of a 64 bit value as defined
-    by the _PROPERTIES dictionary.
-
-    Args
-    ----
-    obj(dict): Properties dictionary.
-
-    Returns
-    -------
-    (int): Integer representation of the properties dictionary.
-    """
-    if isinstance(obj, dict):
-        bitfield = 0
-        for k, v in filter(lambda x: x[1], obj.items()):
-            bitfield |= PROPERTIES[k]
-        return bitfield
-    if isinstance(obj, int):
-        return obj
-    raise TypeError("Un-encodeable type '{}': Expected 'dict' or integer type.".format(type(obj)))
-
-
-def decode_properties(obj):
-    """Decode the properties dictionary from its integer representation.
-
-    The properties field is a dictionary of properties to boolean values. Each
-    property maps to a specific bit of a 64 bit value as defined
-    by the _PROPERTIES dictionary.
-
-    Args
-    ----
-    obj(int): Integer representation of the properties dictionary.
-
-    Returns
-    -------
-    (dict): Properties dictionary.
-    """
-    return {b: bool(f & obj) for b, f in PROPERTIES.items()}
-
-
 _CONVERSIONS = (
     ('graph', compress_json, decompress_json),
     ('meta_data', compress_json, decompress_json),
-    ('signature', str_to_sha256, None),
-    ('gca', str_to_sha256, None),
-    ('gcb', str_to_sha256, None),
-    ('ancestor_a', str_to_sha256, None),
-    ('ancestor_b', str_to_sha256, None),
-    ('pgc', str_to_sha256, None),
+    ('signature', str_to_sha256, memoryview_to_bytes),
+    ('gca', str_to_sha256, memoryview_to_bytes),
+    ('gcb', str_to_sha256, memoryview_to_bytes),
+    ('ancestor_a', str_to_sha256, memoryview_to_bytes),
+    ('ancestor_b', str_to_sha256, memoryview_to_bytes),
+    ('pgc', str_to_sha256, memoryview_to_bytes),
+    ('inputs', None, memoryview_to_bytes),
+    ('outputs', None, memoryview_to_bytes),
     ('creator', str_to_UUID, None),
     ('created', str_to_datetime, None),
     ('updated', str_to_datetime, None),
     ('properties', encode_properties, None)
 )
-
-# FIXME: This is duplicated in egp_physics.gc_type. Consider creating a seperate module of
-# field definitions.
-# PROPERTIES must define the bit position of all the properties listed in
-# the "properties" field of the entry_format.json definition.
-PROPERTIES = {
-    "extended": 1 << 0,
-    "constant": 1 << 1,
-    "conditional": 1 << 2,
-    "deterministic": 1 << 3,
-    "memory_modify": 1 << 4,
-    "object_modify": 1 << 5,
-    "physical": 1 << 6,
-    "arithmetic": 1 << 16,
-    "logical": 1 << 17,
-    "bitwise": 1 << 18,
-    "boolean": 1 << 19,
-    "sequence": 1 << 20
-}
 
 
 _PTR_MAP = {
@@ -321,9 +121,9 @@ _PTR_MAP = {
     'gcb': 'signature'
 }
 
-
-with open(join(dirname(__file__), "formats/table_format.json"), "r") as file_ptr:
-    _GL_TABLE_SCHEMA = load(file_ptr)
+_GL_TABLE_SCHEMA = deepcopy(GMS_TABLE_SCHEMA)
+with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_ptr:
+    merge(_GL_TABLE_SCHEMA, load(file_ptr))
 HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _GL_TABLE_SCHEMA)))
 UPDATE_RETURNING_COLS = tuple((x[1:] for x in HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
 
