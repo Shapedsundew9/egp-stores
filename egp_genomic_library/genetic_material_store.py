@@ -18,10 +18,14 @@ _LOG_DEBUG = _logger.isEnabledFor(DEBUG)
 
 
 # Constants
+_GC_DEPTH = 'code_depth'
+_CODON_DEPTH = 'codon_depth'
 _GC_COUNT = 'num_codes'
 _CODON_COUNT = 'num_codons'
+_UNIQUE_GC_COUNT = 'num_unique_codes'
+_UNIQUE_CODON_COUNT = 'num_unique_codons'
 _OBJECT = 'object'
-_ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0}
+_ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0, _GC_DEPTH: 0, _CODON_DEPTH: 0, _UNIQUE_GC_COUNT: 0, _UNIQUE_CODON_COUNT: 0}
 
 
 # Data schema
@@ -124,7 +128,7 @@ class genetic_material_store():
 
         NOTE: Assumes all referenced GCs in gc_iter exist in self.graph or are in gc_iter.
 
-        gc_count is calculated for all added GC's.
+        _GC_COUNT, _CODON_COUNT, _GC_DEPTH & _CODON_DEPTH are calculated for all added GC's.
 
         Args
         ----
@@ -142,8 +146,19 @@ class genetic_material_store():
         self.graph.add_edges_from(((gc[nl], gc[rel]) for gc in gc_list if gc[rel] is not None))
 
         # Calculate node GC count
-        # GC count is the number of nodes in the sub-tree including the root node.
+        # _GC_COUNT is the number of nodes in the sub-tree including the root node.
+        # _CODON_COUNT is the number of codons in the sub-tree including the root node.
+        # _GC_DEPTH is the depth of the GC tree in codes.
+        # _CODON_DEPTH is the depth of the codon tree.
         for gc in gc_list:
+            # FIXME: This is a placeholder. Figuring out the codon depth requires building the codon tree
+            # Is that worth it (memory & cpu)?
+            gc[_CODON_DEPTH] = 1
+            # FIXME: These are placeholders too. Figuring out the unique number of codes and codons requires
+            # an expensive operation each time.  Is that worth it (memory & cpu)?
+            gc[_UNIQUE_GC_COUNT] = 1
+            gc[_UNIQUE_CODON_COUNT] = 1
+
             work_stack = [gc]
             if _LOG_DEBUG:
                 _logger.debug(f'Adding node {gc[nl]}. Work stack depth 1.')
@@ -164,6 +179,8 @@ class genetic_material_store():
                 else:
                     work_stack.pop()
                     tgc[_GC_COUNT] = left_node[_GC_COUNT] + right_node[_GC_COUNT] + 1
+                    tgc[_GC_DEPTH] = left_node[_GC_DEPTH] if right_node[_GC_DEPTH] < left_node[_GC_DEPTH] else right_node[_GC_DEPTH]
+                    tgc[_GC_DEPTH] += 1
                     tgc[_CODON_COUNT] = 1 if tgc[_GC_COUNT] == 1 else left_node[_CODON_COUNT] + right_node[_CODON_COUNT]
                     if _LOG_DEBUG:
                         _logger.debug(f'Leaf node popped {tgc[nl]}, work_stack length {len(work_stack)}, count {tgc[_GC_COUNT]}.')
