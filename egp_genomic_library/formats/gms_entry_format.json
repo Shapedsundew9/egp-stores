@@ -1,0 +1,671 @@
+{
+    "_e_count": {
+        "check_with": "valid__e_count",
+        "default": 0,
+        "max": 2147483647,
+        "meta": {
+            "description": "The evolvability update count when the genetic code was copied from the higher layer."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "_evolvability": {
+        "check_with": "valid__evolvability",
+        "default": 0,
+        "max": 1,
+        "meta": {
+            "description": "The evolvability when the genetic code was copied from the higher layer."
+        },
+        "min": 0,
+        "type": "float"
+    },
+    "_pgc_e_count": {
+        "check_with": "valid__pgc_e_count",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The evolvability update count when the genetic code was copied from the higher layer."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 2147483647,
+            "min": 0,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "_pgc_evolvability": {
+        "check_with": "valid__pgc_evolvability",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The evolvability when the genetic code was copied from the higher layer."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 1,
+            "min": 0,
+            "type": "float"
+        },
+        "type": "list"
+    },
+    "_pgc_f_count": {
+        "check_with": "valid__pgc_f_count",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The fitness update count when the genetic code was copied from the higher layer."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 2147483647,
+            "min": 0,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "_pgc_fitness": {
+        "check_with": "valid__pgc_fitness",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The fitness when the genetic code was copied from the higher layer."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 1,
+            "min": 0,
+            "type": "float"
+        },
+        "type": "list"
+    },
+    "_reference_count": {
+        "check_with": "valid__reference_count",
+        "default": 0,
+        "max": 9223372036854775000,
+        "meta": {
+            "description": "The reference count when the genetic code was copied from the higher layer."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "ac_count": {
+        "default": 1,
+        "max": 9223372036854775000,
+        "meta": {
+            "description": "The weight of the genetic code in its current alpha class position."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "alpha_class": {
+        "default": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "maxlength": 4,
+        "meta": {
+            "description": "The problem space classification of the genetic code. It is a position in 4 dimensional space where each dimension has a range of -1.0 <= x <= 1.0."
+        },
+        "minlength": 4,
+        "schema": {
+            "max": 1,
+            "min": 0,
+            "type": [
+                "float"
+            ]
+        },
+        "type": "list"
+    },
+    "code_depth": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The depth of the code vertex graph. If this GC is a codon code_depth == 1."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "codon_depth": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The depth of the graph after expansion to codon vertices. If this GC is a codon codon_depth == 1."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "created": {
+        "check_with": "valid_created",
+        "meta": {
+            "description": "The UTC date and time of the codes creation. If the genetic code has been created in another microbiome at an earlier time then this field will be updated."
+        },
+        "type": "datetime"
+    },
+    "e_count": {
+        "check_with": "valid_e_count",
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The number of evolvability updates in this genetic codes life time."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "evolvability": {
+        "check_with": "valid_evolvability",
+        "default": 1.0,
+        "max": 1.0,
+        "meta": {
+            "description": "A measure of success of the genetic codes descendants. The higher the better."
+        },
+        "min": 0.0,
+        "type": "float"
+    },
+    "generation": {
+        "default": 0,
+        "max": 9223372036854775000,
+        "meta": {
+            "description": "The number of generations of genetic code evolved to create this code. A codon is always generation 1. This value may change if the creator changes."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "graph": {
+        "check_with": "valid_graph",
+        "meta": {
+            "description": "Defines the sub-codes of the genetic code and how they are connected together."
+        },
+        "required": true,
+        "schema": {
+            "A": {
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I",
+                                "C"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "B": {
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I",
+                                "C",
+                                "A"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "C": {
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string"
+                        }
+                    ],
+                    "maxlength": 2,
+                    "minlength": 2,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "F": {
+                "maxlength": 1,
+                "minlength": 1,
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "allowed": [
+                                1
+                            ],
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "O": {
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I",
+                                "C",
+                                "A",
+                                "B"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "P": {
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I",
+                                "C",
+                                "A",
+                                "B"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            },
+            "U": {
+                "required": false,
+                "schema": {
+                    "items": [
+                        {
+                            "allowed": [
+                                "I",
+                                "C",
+                                "A",
+                                "B"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "max": 255,
+                            "min": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "check_with": "valid_type",
+                            "max": 32767,
+                            "min": -32768,
+                            "type": "integer"
+                        }
+                    ],
+                    "maxlength": 3,
+                    "minlength": 3,
+                    "type": "list"
+                },
+                "type": "list"
+            }
+        },
+        "type": "dict"
+    },
+    "input_types": {
+        "check_with": "valid_input_types",
+        "default_setter": "set_input_types",
+        "maxlength": 256,
+        "meta": {
+            "description": "The set of types of the inputs in ascending order of type number."
+        },
+        "schema": {
+            "check_with": "valid_type",
+            "max": 32767,
+            "min": -32768,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "inputs": {
+        "check_with": "valid_inputs",
+        "default_setter": "set_input_indices",
+        "meta": {
+            "description": "The index of the each input parameters type in the 'input_types' list in the order they are required for the function call."
+        },
+        "type": "binary"
+    },
+    "meta_data": {
+        "meta": {
+            "description": "Other data associated with this genetic code."
+        },
+        "nullable": true,
+        "required": false,
+        "schema": {
+            "extended_class": {
+                "type": "dict"
+            },
+            "extended_properties": {
+                "type": "dict"
+            },
+            "function": {
+                "keysrules": {
+                    "type": "string"
+                },
+                "schema": {
+                    "python3": {
+                        "required": true
+                    }
+                },
+                "type": "dict",
+                "valuesrules": {
+                    "keysrules": {
+                        "regex": "[0-9]*",
+                        "type": "string"
+                    },
+                    "schema": {
+                        "0": {
+                            "required": true
+                        }
+                    },
+                    "type": "dict",
+                    "valuesrules": {
+                        "schema": {
+                            "callable": {
+                                "maxlength": 128,
+                                "minlength": 1,
+                                "type": "string"
+                            },
+                            "code": {
+                                "maxlength": 1024,
+                                "minlength": 1,
+                                "type": "string"
+                            },
+                            "imports": {
+                                "maxlength": 32,
+                                "schema": {
+                                    "schema": {
+                                        "module": {
+                                            "maxlength": 64,
+                                            "minlength": 1,
+                                            "required": true,
+                                            "type": "string"
+                                        },
+                                        "name": {
+                                            "maxlength": 64,
+                                            "minlength": 1,
+                                            "required": true,
+                                            "type": "string"
+                                        },
+                                        "object": {
+                                            "maxlength": 64,
+                                            "minlength": 1,
+                                            "required": true,
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "dict"
+                                },
+                                "type": "list"
+                            },
+                            "inline": {
+                                "maxlength": 1024,
+                                "minlength": 1,
+                                "required": true,
+                                "type": "string"
+                            }
+                        },
+                        "type": "dict"
+                    }
+                }
+            },
+            "name": {
+                "maxlength": 255,
+                "type": "string"
+            }
+        },
+        "type": "dict"
+    },
+    "num_codes": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The number of vertices in the GC code vertex graph."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "num_codons": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The number of vertices in the codon vertex graph."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "num_inputs": {
+        "check_with": "valid_num_inputs",
+        "default_setter": "set_num_inputs",
+        "max": 256,
+        "meta": {
+            "description": "The number of inputs to the genetic code."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "num_outputs": {
+        "check_with": "valid_num_outputs",
+        "default_setter": "set_num_outputs",
+        "max": 256,
+        "meta": {
+            "description": "The number of outputs of the genetic code."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "num_unique_codes": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The number of unique codes in the code vertex graph."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "num_unique_codons": {
+        "default": 1,
+        "max": 2147483647,
+        "meta": {
+            "description": "The number of unique codons in the codon vertex graph."
+        },
+        "min": 1,
+        "type": "integer"
+    },
+    "output_types": {
+        "check_with": "valid_output_types",
+        "default_setter": "set_output_types",
+        "maxlength": 256,
+        "meta": {
+            "description": "The set of types of the outputs in ascending order of type number."
+        },
+        "schema": {
+            "check_with": "valid_type",
+            "max": 32767,
+            "min": -32768,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "outputs": {
+        "check_with": "valid_outputs",
+        "default_setter": "set_output_indices",
+        "meta": {
+            "description": "The index of the each output parameters type in the 'output_types' list in the order they are returned from the function call."
+        },
+        "type": "binary"
+    },
+    "pgc_e_count": {
+        "check_with": "valid_pgc_e_count",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The number of evolvability updates in this genetic codes life time."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 2147483647,
+            "min": 1,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "pgc_evolvability": {
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "A measure of success of the genetic codes descendants. The higher the better."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 1,
+            "min": 0,
+            "type": "float"
+        },
+        "type": "list"
+    },
+    "pgc_f_count": {
+        "check_with": "valid_pgc_f_count",
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "The number of fitness updates in this genetic codes life time."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 2147483647,
+            "min": 1,
+            "type": "integer"
+        },
+        "type": "list"
+    },
+    "pgc_fitness": {
+        "default": null,
+        "maxlength": 16,
+        "meta": {
+            "description": "A measure of success of the genetic code. The higher the better."
+        },
+        "minlength": 16,
+        "nullable": true,
+        "schema": {
+            "max": 1,
+            "min": 0,
+            "type": "float"
+        },
+        "type": "list"
+    },
+    "properties": {
+        "check_with": "valid_properties",
+        "default": 0,
+        "max": 9223372036854776000,
+        "meta": {
+            "description": "The properties of the inputs & outputs"
+        },
+        "min": -9223372036854776000,
+        "type": "integer"
+    },
+    "reference_count": {
+        "check_with": "valid_reference_count",
+        "default": 0,
+        "max": 9223372036854776000,
+        "meta": {
+            "description": "The number of times this code is referenced in other codes. If this code is referenced by code A once and no other then the reference count is 1. If genetic code X is then referenced by genetic code Y this code is referenced by both X & Y (through X) and the count is 2."
+        },
+        "min": 0,
+        "type": "integer"
+    },
+    "updated": {
+        "check_with": "valid_updated",
+        "default_setter": "set_updated",
+        "type": "datetime"
+    }
+}
