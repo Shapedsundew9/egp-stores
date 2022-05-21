@@ -44,7 +44,7 @@
         "type": "INTEGER"
     },
     "created": {
-        "default": "NOW()",
+        "default": "(NOW() AT TIME ZONE 'UTC')",
         "type": "TIMESTAMP"
     },
     "e_count": {
@@ -135,7 +135,7 @@
         "type": "BIGINT"
     },
     "updated": {
-        "default": "NOW()",
+        "default": "(NOW() AT TIME ZONE 'UTC')",
         "type": "TIMESTAMP"
     }
 }

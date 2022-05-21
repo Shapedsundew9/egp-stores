@@ -16,10 +16,10 @@
     },
     "updated": {
         "type": "TIMESTAMP",
-        "default": "NOW()"
+        "default": "(NOW() AT TIME ZONE 'UTC')"
     },
     "created": {
         "type": "TIMESTAMP",
-        "default": "NOW()"
+        "default": "(NOW() AT TIME ZONE 'UTC')"
     }
 }
