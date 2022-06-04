@@ -26,8 +26,6 @@ _UNIQUE_GC_COUNT = 'num_unique_codes'
 _UNIQUE_CODON_COUNT = 'num_unique_codons'
 _OBJECT = 'object'
 _ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0, _GC_DEPTH: 0, _CODON_DEPTH: 0, _UNIQUE_GC_COUNT: 0, _UNIQUE_CODON_COUNT: 0}
-_CODON_CODE = 'codon_code'
-_MAX_GC_CODE_SIZE = 100
 
 
 # Data schema
@@ -184,14 +182,8 @@ class genetic_material_store():
                     tgc[_GC_DEPTH] = left_node[_GC_DEPTH] if right_node[_GC_DEPTH] < left_node[_GC_DEPTH] else right_node[_GC_DEPTH]
                     tgc[_GC_DEPTH] += 1
                     tgc[_CODON_COUNT] = 1 if tgc[_GC_COUNT] == 1 else left_node[_CODON_COUNT] + right_node[_CODON_COUNT]
-                    tgc[_CODON_CODE] = None if tgc[_CODON_COUNT] > _MAX_GC_CODE_SIZE else self._codon_code(tgc[nl])
                     if _LOG_DEBUG:
                         _logger.debug(f'Leaf node popped {tgc[nl]}, work_stack length {len(work_stack)}, count {tgc[_GC_COUNT]}.')
-
-    def _codon_code(gc):
-        # Why would I put this here rather than in execution.py?
-        # Has no need for the graph?
-        return None
 
     def hl_copy(self, gcs, field_names):
         """Copy the higher layer field to the current layer field.
