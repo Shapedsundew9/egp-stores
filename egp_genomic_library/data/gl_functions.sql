@@ -45,7 +45,6 @@ CREATE OR REPLACE FUNCTION
     LANGUAGE plpgsql
     AS $$
 	DECLARE
-        _len INT = cardinality(cscv);
 		ccw REAL[];
 		pcw REAL[];
 		ppw REAL[];
@@ -69,6 +68,7 @@ CREATE OR REPLACE FUNCTION
 		twa = array_agg(e.el1 + e.el2) FROM unnest(ccw, pcw) e(el1, el2);
 		tw = array_agg(e.el1 - e.el2) FROM unnest(twa, ppw) e(el1, el2);
 
+        -- See fixed_array_update() which is the same as this line
 		-- tc = cscc + pscc - cspc
         tc = array_agg(e.el1 + e.el2 - e.el3) FROM unnest(cscc, pscc, cspc) e(el1, el2, el3);
 
@@ -79,6 +79,21 @@ CREATE OR REPLACE FUNCTION
 	END;
 $$;
 
+CREATE OR REPLACE FUNCTION
+	fixed_array_update(
+		cscc INTEGER[],
+		pscc INTEGER[],
+		cspc INTEGER[])
+    RETURNS REAL[]
+    SET SCHEMA 'public'
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+		-- Overall calculation
+		-- result = CSCC + PSCC - CSPC
+        RETURN array_agg(e.el1 + e.el2 - e.el3) FROM unnest(cscc, pscc, cspc) e(el1, el2, el3);
+	END;
+$$;
 
 CREATE OR REPLACE FUNCTION
 	fixed_vector_inplace_weights_update(
