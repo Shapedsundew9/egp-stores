@@ -6,7 +6,7 @@ The GMS is a abstract base class for retrieving genetic codes.
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
 # TODO: Move to graph_tool for efficiency
-from networkx import DiGraph
+from graph_tool import Graph
 from json import load
 from os.path import dirname, join
 
@@ -41,7 +41,9 @@ class genetic_material_store():
         self.nl = node_label
         self.lel = left_edge_label
         self.rel = right_edge_label
-        self.graph = DiGraph()
+        self.graph = Graph()
+        self.graph.vertex_properties[_OBJECT] = self.graph.new_vertex_property('python::object')
+        self._l2v = {}
 
     def select(self):
         """Select method required for all GMSs."""
@@ -68,22 +70,22 @@ class genetic_material_store():
 
         # Initialise search
         path = [node_label]
-        idx = randint(0, self.graph.nodes[node_label][_OBJECT][_GC_COUNT] - 1)
-        node = self.graph.nodes[node_label][_OBJECT]
-        left_count = 0 if node[lel] is None else self.graph.nodes[node[lel]][_OBJECT][_GC_COUNT]
+        node = self.graph.vertex_properties[_OBJECT][self._l2v[node_label]]
+        idx = randint(0, node[_GC_COUNT] - 1)
+        left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
         pos = left_count
 
         while pos != idx:
             if pos > idx:
                 path.append(node[lel])
                 pos -= left_count
-                node = self.graph.nodes[node[lel]][_OBJECT]
-                left_count = 0 if node[lel] is None else self.graph.nodes[node[lel]][_OBJECT][_GC_COUNT]
+                node = self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]]
+                left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
                 pos += left_count
             if pos < idx:
                 path.append(node[rel])
-                node = self.graph.nodes[node[rel]][_OBJECT]
-                left_count = 0 if node[lel] is None else self.graph.nodes[node[lel]][_OBJECT][_GC_COUNT]
+                node = self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]]
+                left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
                 pos += left_count + 1
 
         return path
@@ -104,20 +106,23 @@ class genetic_material_store():
         list(gc[nl]): The list of GC node labels actually deleted.
         """
         # All the nodes that exist in the graph and have no incoming edges
-        nl_list = [nl for nl in nl_iter if nl in self.graph.nodes and self.graph.in_degree(nl)]
+        v_list = [self._l2v[nl] for nl in nl_iter if nl in self._l2v and self._l2v[nl].in_degree()]
 
         # Use a while loop so we can add to it
         victims = set()
-        while nl_list:
-            nl = nl_list.pop(0)
-            victims.add(nl)
-            for _, v in self.graph.out_edges(nl):
-                if self.graph.in_degree(v) == 1:
-                    nl_list.append(v)
+        while v_list:
+            v = v_list.pop(0)
+            victims.add(v)
+            for e in v.out_edges():
+                if e.target().in_degree() == 1:
+                    v_list.append(e.target())
 
         # Remove all the victims
-        self.graph.remove_nodes_from(victims)
-        return victims
+        self.graph.remove_vertex(victims, fast=True)
+
+        # Return list of victim node labels
+        object_property = self.graph.vertex_properties[_OBJECT]
+        return [object_property[v][self.nl] for v in victims]
 
     def add_nodes(self, gc_iter):
         """Add a GC nodes to the GMS graph.
@@ -139,11 +144,15 @@ class genetic_material_store():
         lel = self.lel
         rel = self.rel
 
-        # Add all nodes that do not already exist & the edges between them & existing nodes
-        gc_list = [gc for gc in gc_iter if gc[nl] not in self.graph.nodes]
-        self.graph.add_nodes_from(((gc[nl], {_OBJECT: gc}) for gc in gc_list))
-        self.graph.add_edges_from(((gc[nl], gc[lel]) for gc in gc_list if gc[lel] is not None))
-        self.graph.add_edges_from(((gc[nl], gc[rel]) for gc in gc_list if gc[rel] is not None))
+        # Add all nodes that do not already exist
+        gc_list = [gc for gc in gc_iter if gc[nl] not in self._l2v]
+        new_vertices = self.graph.add_vertex(len(gc_list))
+        for nv, gc in zip(new_vertices, gc_list):
+            self.graph.vertex_properties[_OBJECT][nv] = gc
+            self._l2v[gc[nl]] = nv # Needs to be the descriptor as fast removal invalidate indices.
+
+        self.graph.add_edge_list(((self._l2v[gc[nl]], self._l2v[gc[lel]]) for gc in gc_list if gc[lel] is not None))
+        self.graph.add_edge_list(((self._l2v[gc[nl]], self._l2v[gc[rel]]) for gc in gc_list if gc[rel] is not None))
 
         # Calculate node GC count
         # _GC_COUNT is the number of nodes in the sub-tree including the root node.
@@ -166,8 +175,8 @@ class genetic_material_store():
                 tgc = work_stack[-1]
                 tgc_lel = tgc[lel]
                 tgc_rel = tgc[rel]
-                left_node = self.graph.nodes[tgc[lel]][_OBJECT] if tgc_lel is not None else _ZERO_GC_COUNT
-                right_node = self.graph.nodes[tgc[rel]][_OBJECT] if tgc_rel is not None else _ZERO_GC_COUNT
+                left_node = self.graph.vertex_properties[_OBJECT][self._l2v[tgc_lel]] if tgc_lel is not None else _ZERO_GC_COUNT
+                right_node = self.graph.vertex_properties[_OBJECT][self._l2v[tgc_rel]] if tgc_rel is not None else _ZERO_GC_COUNT
                 if _GC_COUNT not in left_node:
                     work_stack.append(left_node)
                     if _LOG_DEBUG:
