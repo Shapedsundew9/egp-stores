@@ -12,7 +12,7 @@
         "type": "UUID"
     },
     "effective_pgcs": {
-        "nullable": true,
+        "default": "ARRAY[]::BYTEA[]",
         "type": "BYTEA[]"
     },
     "gca": {

@@ -27,8 +27,7 @@
         "type": "uuid"
     },
     "effective_pgcs": {
-        "default": null,
-        "nullable": true,
+        "default": [],
         "type": "list",
         "schema": {
             "maxlength": 32,
