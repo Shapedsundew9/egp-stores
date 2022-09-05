@@ -13,8 +13,8 @@ from pytest import approx
 
 _DEFAULT_VALUE = 1.0
 _DEFAULT_COUNT = 1
-_SQL_STR = ('SELECT vector_weighted_variable_array_update({cscv}, {cscc}, {pscv}, {pscc}, {cspv}, {cspc}'
-            ', 1.0::DOUBLE PRECISION, 1::BIGINT), variable_vector_weights_update({cscc}, {pscc}, {cspc}, 1::BIGINT),'
+_SQL_STR = ('SELECT weighted_fixed_array_update({cscv}::REAL[], {cscc}::INT[], {pscv}::REAL[], {pscc}::INT[], {cspv}::REAL[], {cspc}::INT[]),'
+            ' fixed_array_update({cscc}::INT[], {pscc}::INT[], {cspc}::INT[]),'
             ' {tv}, {tc} FROM test_table')
 _CONFIG = {
     'database': {
@@ -26,28 +26,28 @@ _CONFIG = {
             'type': 'INTEGER'
         },
         'cscv': {
-            'type': 'DOUBLE PRECISION[]'
+            'type': 'REAL[]'
         },
         'cscc': {
-            'type': 'BIGINT[]'
+            'type': 'INT[]'
         },
         'pscv': {
-            'type': 'DOUBLE PRECISION[]'
+            'type': 'REAL[]'
         },
         'pscc': {
-            'type': 'BIGINT[]'
+            'type': 'INT[]'
         },
         'cspv': {
-            'type': 'DOUBLE PRECISION[]'
+            'type': 'REAL[]'
         },
         'cspc': {
-            'type': 'BIGINT[]'
+            'type': 'INT[]'
         },
         'tv': {
-            'type': 'DOUBLE PRECISION[]'
+            'type': 'REAL[]'
         },
         'tc': {
-            'type': 'BIGINT[]'
+            'type': 'INT[]'
         }
     },
     'data_files': [],
@@ -163,8 +163,9 @@ def _random_lengths(criteria):
     ((int, int, int)): Lengths meeting the criteria
     """
     csp_len = randint(1, 100)
-    return _random_length(criteria[0], csp_len), _random_length(criteria[1], csp_len), csp_len
-
+    # Mixed length arrays no longer supported
+    # return _random_length(criteria[0], csp_len), _random_length(criteria[1], csp_len), csp_len
+    return csp_len, csp_len, csp_len
 
 def _combo_generator():
     """Generate all combinations of random parameter array lengths.
@@ -334,7 +335,8 @@ def meta_table_config(config, create=False):
 
 def test_sql_array_update():
     """Validate the SQL functions match the model."""
-    meta = table(meta_table_config(_CONFIG))
+
+    meta = table(meta_table_config(_CONFIG, create=True))
     t = table(_CONFIG)
     if t.raw.creator:
         meta = table(meta_table_config(_CONFIG, create=True))

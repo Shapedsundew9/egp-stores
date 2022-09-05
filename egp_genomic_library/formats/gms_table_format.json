@@ -51,6 +51,11 @@
         "default": "1",
         "type": "INTEGER"
     },
+    "effective_pgc_fitness": {
+        "description": "The fitness increment delivered by the pGC in the effective_pgc_* list.",
+        "nullable": true,
+        "type": "REAL[]"
+    },
     "evolvability": {
         "default": "1.0",
         "type": "REAL"

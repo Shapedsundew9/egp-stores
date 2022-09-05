@@ -1,6 +1,5 @@
 """Validate & normalise JSON Genetic Code definitions."""
 
-from datetime import datetime
 from json import load
 from os.path import dirname, join
 from copy import deepcopy
@@ -21,6 +20,9 @@ class _gl_json_entry_validator(_gl_entry_validator):
 
     def _normalize_coerce_signature_str_to_binary(self, value):
         return str_to_sha256(value)
+
+    def _normalize_coerce_signature_str_list_to_binary_list(self, value):
+        return [str_to_sha256(v) for v in value] 
 
     def _normalize_coerce_datetime_str_to_datetime(self, value):
         return str_to_datetime(value)

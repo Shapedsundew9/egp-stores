@@ -26,6 +26,19 @@
         },
         "type": "uuid"
     },
+    "effective_pgcs": {
+        "default": null,
+        "nullable": true,
+        "type": "list",
+        "schema": {
+            "maxlength": 32,
+            "meta": {
+                "description": "The signatures of pGC's have increased fitness last time they were used on this GC's ancestors."
+            },
+            "minlength": 32,
+            "type": "binary"
+        }
+    },
     "gca": {
         "default": null,
         "maxlength": 32,
@@ -65,5 +78,15 @@
         "minlength": 32,
         "type": "binary",
         "default_setter": "set_signature"
+    },
+    "sms": {
+        "default": null,
+        "maxlength": 32,
+        "meta": {
+            "description": "The signature of the Super Mutation Sequence that created this GC, if any."
+        },
+        "minlength": 32,
+        "nullable": true,
+        "type": "binary"
     }
 }

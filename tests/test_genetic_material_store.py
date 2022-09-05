@@ -1,12 +1,16 @@
 """Test the Genetic Material Store (GMS)"""
+import gi
+gi.require_version('Gtk', '3.0')
 
 import pytest
 from random import choice
 from os.path import dirname, join
 from json import load
 from logging import NullHandler, getLogger
+from graph_tool.draw import graph_draw
 
 from egp_genomic_library import genetic_material_store, _CODON_COUNT, _GC_COUNT
+from egp_genomic_library.genetic_material_store import _OBJECT
 
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -29,6 +33,14 @@ def test_graph_construction(test_case_idx):
     gms = genetic_material_store("id", "left", "right")
     test_case = test_data[test_case_idx]
     gms.add_nodes(test_case)
+    graph_draw(
+        gms.graph,
+        output_size=(1000, 1000),
+        vertex_size=50,
+        vertex_text=gms.graph.new_vertex_property("string", [gc[gms.nl] for gc in gms.graph.vertex_properties[_OBJECT]]),
+        edge_pen_width=8,
+        output=f'test_graph_construction_{test_case_idx}.png'
+    )
     for node in test_case:
         if node['expected_gc_count'] != node[_GC_COUNT]:
             _logger.error(f'Unexpected gc_count in {node}')

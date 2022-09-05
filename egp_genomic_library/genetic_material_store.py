@@ -6,7 +6,10 @@ The GMS is a abstract base class for retrieving genetic codes.
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
 # TODO: Move to graph_tool for efficiency
-from graph_tool import Graph
+from graph_tool import Graph, Vertex
+from graph_tool.topology import label_out_component, all_paths
+from numpy.random import choice as weighted_choice
+from random import choice
 from json import load
 from os.path import dirname, join
 
@@ -64,31 +67,14 @@ class genetic_material_store():
         -------
         list(type(gc[nl])): The path to the selected node. The first element in the list will be nl.
         """
-        # Fast access
-        lel = self.lel
-        rel = self.rel
-
-        # Initialise search
-        path = [node_label]
-        node = self.graph.vertex_properties[_OBJECT][self._l2v[node_label]]
-        idx = randint(0, node[_GC_COUNT] - 1)
-        left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
-        pos = left_count
-
-        while pos != idx:
-            if pos > idx:
-                path.append(node[lel])
-                pos -= left_count
-                node = self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]]
-                left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
-                pos += left_count
-            if pos < idx:
-                path.append(node[rel])
-                node = self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]]
-                left_count = 0 if node[lel] is None else self.graph.vertex_properties[_OBJECT][self._l2v[node[lel]]][_GC_COUNT]
-                pos += left_count + 1
-
-        return path
+        source_node = self._l2v[node_label]
+        subtree_mask = label_out_component(self.graph, source_node).a
+        random_node_idx = weighted_choice(len(subtree_mask), p = subtree_mask / subtree_mask.sum())
+        all_paths_tuple = tuple(all_paths(self.graph, source_node, random_node_idx))
+        if not all_paths_tuple:
+            return [node_label]
+        path_indices = choice(all_paths_tuple)
+        return [self.graph.vertex_properties[_OBJECT][v][self.nl] for v in path_indices]
 
     def remove_nodes(self, nl_iter):
         """Remove nodes recursively from the graph.
@@ -147,6 +133,11 @@ class genetic_material_store():
         # Add all nodes that do not already exist
         gc_list = [gc for gc in gc_iter if gc[nl] not in self._l2v]
         new_vertices = self.graph.add_vertex(len(gc_list))
+
+        # Special case when gc_list only has one element - annoying graph_tool function behaviour
+        if isinstance(new_vertices, Vertex):
+            new_vertices = [new_vertices]
+            
         for nv, gc in zip(new_vertices, gc_list):
             self.graph.vertex_properties[_OBJECT][nv] = gc
             self._l2v[gc[nl]] = nv # Needs to be the descriptor as fast removal invalidate indices.
