@@ -11,10 +11,6 @@
         "nullable": true,
         "type": "UUID"
     },
-    "effective_pgcs": {
-        "default": "ARRAY[]::BYTEA[]",
-        "type": "BYTEA[]"
-    },
     "gca": {
         "nullable": true,
         "type": "BYTEA"

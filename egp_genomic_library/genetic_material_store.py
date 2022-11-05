@@ -3,6 +3,7 @@
 The GMS is a abstract base class for retrieving genetic codes.
 """
 
+from ast import fix_missing_locations
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
 # TODO: Move to graph_tool for efficiency
@@ -21,13 +22,34 @@ _LOG_DEBUG = _logger.isEnabledFor(DEBUG)
 
 
 # Constants
+# gGC fields
 _GC_DEPTH = 'code_depth'
 _CODON_DEPTH = 'codon_depth'
 _GC_COUNT = 'num_codes'
 _CODON_COUNT = 'num_codons'
 _UNIQUE_GC_COUNT = 'num_unique_codes'
 _UNIQUE_CODON_COUNT = 'num_unique_codons'
-_OBJECT = 'object'
+
+# GC structure edge labels
+_GCS_LEL = 'gca'
+_GCS_REL = 'gcb'
+
+# Ancestory structure edge labels
+_A_AA = 'ancestor_a'
+_A_AB = 'ancestor_b'
+_A_PGC = 'pgc'
+
+# Graph properties
+_VP_OBJECT = 'object'
+_EP_TYPE = 'ep_type'
+_EP_GCS_LEL = 1
+_EP_GCS_REL = 2
+_EP_A_AA = 4
+_EP_A_AB = 8
+_EP_A_PGC = 16
+_EP_GCS_MASK = _EP_GCS_LEL + _EP_GCS_REL
+
+# Other constants
 _ZERO_GC_COUNT = {_GC_COUNT: 0, _CODON_COUNT: 0, _GC_DEPTH: 0, _CODON_DEPTH: 0, _UNIQUE_GC_COUNT: 0, _UNIQUE_CODON_COUNT: 0}
 
 
@@ -39,23 +61,29 @@ with open(join(dirname(__file__), "formats/gms_table_format.json"), "r") as file
 class genetic_material_store():
     """Base class for all genetic material stores."""
 
-    def __init__(self, node_label='ref', left_edge_label='gca_ref', right_edge_label='gcb_ref'):
+    def __init__(self, node_label:str='ref'):
         """Define the keys used to build the GC graph."""
         self.nl = node_label
-        self.lel = left_edge_label
-        self.rel = right_edge_label
+        postfix = '_ref' if node_label == 'ref' else ''
+        self.gcs_lel = _GCS_LEL + postfix
+        self.gcs_rel = _GCS_REL + postfix
+        self.a_aa = _A_AA + postfix
+        self.a_ab = _A_AB + postfix
+        self.a_pgc = _A_PGC + postfix
+
         self.graph = Graph()
-        self.graph.vertex_properties[_OBJECT] = self.graph.new_vertex_property('python::object')
+        self.graph.vertex_properties[_VP_OBJECT] = self.graph.new_vertex_property('python::object')
+        self.graph.edge_properties[_EP_TYPE] = self.graph.new_edge_property('uint8_t')
         self._l2v = {}
 
     def select(self):
         """Select method required for all GMSs."""
         raise NotImplementedError
 
-    def random_descendant(self, node_label):
+    def random_descendant(self, node_label) -> list:
         """Select a random descendant from the node with node_label.
 
-        nl may be selected.
+        The node with node_label may be selected.
         Every node in the tree has a weight equal to the number of incoming edges. i.e. if a node
         appears N times in the flattened tree it will have a weight of N.
 
@@ -74,7 +102,7 @@ class genetic_material_store():
         if not all_paths_tuple:
             return [node_label]
         path_indices = choice(all_paths_tuple)
-        return [self.graph.vertex_properties[_OBJECT][v][self.nl] for v in path_indices]
+        return [self.graph.vertex_properties[_VP_OBJECT][v][self.nl] for v in path_indices]
 
     def remove_nodes(self, nl_iter):
         """Remove nodes recursively from the graph.
@@ -92,22 +120,31 @@ class genetic_material_store():
         list(gc[nl]): The list of GC node labels actually deleted.
         """
         # All the nodes that exist in the graph and have no incoming edges
+
+        # This all needs fixing
+        # Did not account for both GCA & GCB being the same
+        # Needs to consider deleting ancestory
+        FIX ME
+
         v_list = [self._l2v[nl] for nl in nl_iter if nl in self._l2v and self._l2v[nl].in_degree()]
 
         # Use a while loop so we can add to it
         victims = set()
+        ept = self.graph.edge_properties[_EP_TYPE]
         while v_list:
             v = v_list.pop(0)
             victims.add(v)
             for e in v.out_edges():
-                if e.target().in_degree() == 1:
+                # Only GC Structure edges count
+                incoming_gcs_edges = tuple(ie for ie in e.target().in_edges() if ept[ie] & _EP_GCS_MASK)
+                if len(incoming_gcs_edges) == 1:
                     v_list.append(e.target())
 
         # Remove all the victims
         self.graph.remove_vertex(victims, fast=True)
 
         # Return list of victim node labels
-        object_property = self.graph.vertex_properties[_OBJECT]
+        object_property = self.graph.vertex_properties[_VP_OBJECT]
         return [object_property[v][self.nl] for v in victims]
 
     def add_nodes(self, gc_iter):
@@ -123,34 +160,76 @@ class genetic_material_store():
 
         Args
         ----
-        gc_iter (iter(gc)): Iterable of GC's to add. Must include self.nl, self.lel & self.rel keys.
+        gc_iter (iter(gc)): Iterable of GC's to add. Must include all keys.
         """
         # Fast access
         nl = self.nl
-        lel = self.lel
-        rel = self.rel
+        lel = self.gcs_lel
+        rel = self.gcs_rel
+        aa = self.a_aa
+        ab = self.a_ab
+        pgc = self.a_pgc
 
-        # Add all nodes that do not already exist
-        gc_list = [gc for gc in gc_iter if gc[nl] not in self._l2v]
-        new_vertices = self.graph.add_vertex(len(gc_list))
+        # Add all nodes that do not already exist or are stubs (None)
+        vpo = self.graph.vertex_properties[_VP_OBJECT]
+        new_gc_list = []
+        defined_gc_list = []
+        for gc in gc_iter:
+            gc_nl = gc[nl]
+            if gc_nl not in self._l2v:
+                new_gc_list.append[gc]
+                # Create a place holder so we do not stub
+                self._l2v[gc_nl] = None 
+            elif vpo[self._l2v[gc_nl]] is None:
+                vpo[self._l2v[gc_nl]] = gc
+                defined_gc_list.append(gc)
 
-        # Special case when gc_list only has one element - annoying graph_tool function behaviour
-        if isinstance(new_vertices, Vertex):
-            new_vertices = [new_vertices]
+        # Add Ancestory stub nodes
+        defined_gc_list.extend(new_gc_list)
+        stub_list = []
+        for gc in defined_gc_list:
+            stub = (gc[nl], gc[aa], gc[ab], gc[pgc])
+            for label in stub[1:]:
+                if label not in self._l2v:
+                    stub_list.append(stub)
+
+        # If there are some new nodes
+        if new_gc_list or stub_list:
+            new_vertices = self.graph.add_vertex(len(new_gc_list) + len(stub_list))
+
+            # Special case when there is only one element - annoying graph_tool function behaviour
+            if isinstance(new_vertices, Vertex):
+                new_vertices = [new_vertices]
             
-        for nv, gc in zip(new_vertices, gc_list):
-            self.graph.vertex_properties[_OBJECT][nv] = gc
-            self._l2v[gc[nl]] = nv # Needs to be the descriptor as fast removal invalidate indices.
+            # Fully defined nodes
+            for nv, gc in zip(new_vertices[:len(new_gc_list)], new_gc_list):
+                self.graph.vertex_properties[_VP_OBJECT][nv] = gc
+                self._l2v[gc[nl]] = nv # Needs to be the descriptor as fast removal invalidate indices.
 
-        self.graph.add_edge_list(((self._l2v[gc[nl]], self._l2v[gc[lel]]) for gc in gc_list if gc[lel] is not None))
-        self.graph.add_edge_list(((self._l2v[gc[nl]], self._l2v[gc[rel]]) for gc in gc_list if gc[rel] is not None))
+            # Stubbed nodes 
+            for nv, stub in zip(new_vertices[len(new_gc_list):], stub_list):
+                self._l2v[stub[0]] = nv # Needs to be the descriptor as fast removal invalidate indices.
+
+        # Add GC Structure edges
+        lel_edge_gen = ((self._l2v[gc[nl]], self._l2v[gc[lel]], _EP_GCS_LEL) for gc in defined_gc_list if gc[lel] is not None)
+        self.graph.add_edge_list(lel_edge_gen, eprops=(self.graph.edge_properties[_GCS_LEL],))
+        rel_edge_gen = ((self._l2v[gc[nl]], self._l2v[gc[rel]], _EP_GCS_REL) for gc in defined_gc_list if gc[rel] is not None)
+        self.graph.add_edge_list(rel_edge_gen, eprops=(self.graph.edge_properties[_GCS_REL],))
+
+        # Add ancestory edges
+        aa_edge_gen = ((self._l2v[stub[1]], self._l2v[stub[0]], _EP_A_AA) for stub in stub_list if stub[1] is not None)
+        self.add_edge_list(aa_edge_gen, eprops=(self.graph.edge_properties[_A_AA],))
+        ab_edge_gen = ((self._l2v[stub[2]], self._l2v[stub[0]], _EP_A_AB) for stub in stub_list if stub[2] is not None)
+        self.add_edge_list(ab_edge_gen, eprops=(self.graph.edge_properties[_A_AB],))
+        pgc_edge_gen = ((self._l2v[stub[3]], self._l2v[stub[0]], _EP_A_PGC) for stub in stub_list if stub[3] is not None)
+        self.add_edge_list(pgc_edge_gen, eprops=(self.graph.edge_properties[_A_PGC],))
 
         # Calculate node GC count
         # _GC_COUNT is the number of nodes in the sub-tree including the root node.
         # _CODON_COUNT is the number of codons in the sub-tree including the root node.
         # _GC_DEPTH is the depth of the GC tree in codes.
         # _CODON_DEPTH is the depth of the codon tree.
-        for gc in gc_list:
+        for gc in defined_gc_list:
             # FIXME: This is a placeholder. Figuring out the codon depth requires building the codon tree
             # Is that worth it (memory & cpu)?
             gc[_CODON_DEPTH] = 1
@@ -166,8 +245,8 @@ class genetic_material_store():
                 tgc = work_stack[-1]
                 tgc_lel = tgc[lel]
                 tgc_rel = tgc[rel]
-                left_node = self.graph.vertex_properties[_OBJECT][self._l2v[tgc_lel]] if tgc_lel is not None else _ZERO_GC_COUNT
-                right_node = self.graph.vertex_properties[_OBJECT][self._l2v[tgc_rel]] if tgc_rel is not None else _ZERO_GC_COUNT
+                left_node = self.graph.vertex_properties[_VP_OBJECT][self._l2v[tgc_lel]] if tgc_lel is not None else _ZERO_GC_COUNT
+                right_node = self.graph.vertex_properties[_VP_OBJECT][self._l2v[tgc_rel]] if tgc_rel is not None else _ZERO_GC_COUNT
                 if _GC_COUNT not in left_node:
                     work_stack.append(left_node)
                     if _LOG_DEBUG:

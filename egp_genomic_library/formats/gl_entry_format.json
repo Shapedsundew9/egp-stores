@@ -26,18 +26,6 @@
         },
         "type": "uuid"
     },
-    "effective_pgcs": {
-        "default": [],
-        "type": "list",
-        "schema": {
-            "maxlength": 32,
-            "meta": {
-                "description": "The signatures of pGC's have increased fitness last time they were used on this GC's ancestors."
-            },
-            "minlength": 32,
-            "type": "binary"
-        }
-    },
     "gca": {
         "default": null,
         "maxlength": 32,

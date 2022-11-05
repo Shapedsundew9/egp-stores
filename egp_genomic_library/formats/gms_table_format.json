@@ -51,10 +51,6 @@
         "default": "1",
         "type": "INTEGER"
     },
-    "effective_pgc_fitness": {
-        "default": "ARRAY[]::REAL[]",
-        "type": "REAL[]"
-    },
     "evolvability": {
         "default": "1.0",
         "type": "REAL"

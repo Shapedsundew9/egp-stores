@@ -10,6 +10,70 @@ from zlib import compress, decompress
 from uuid import UUID
 from datetime import datetime
 from egp_physics.gc_type import PROPERTIES
+from typing import Union
+from base64 import b64encode, b64decode
+
+
+def json_obj_to_str(obj: Union[dict, list, None]) -> Union[str, None]:
+    """Dump a python object that is a valid JSON structure to a string.
+    
+    Args
+    ----
+    obj must be a JSON compatible python object
+
+    Returns
+    -------
+    JSON string representation of obj
+    """
+    return None if obj is None else dumps(obj)
+
+
+def str_to_json_obj(obj: Union[str, None]) -> Union[dict, list, None]:
+    """Dump a python object that is a valid JSON structure to a string.
+    
+    Args
+    ----
+    obj must be a JSON compatible string
+
+    Returns
+    -------
+    python object representation of obj
+    """
+    return None if obj is None else loads(obj)
+
+
+def encode_effective_pgcs(obj:Union[list[list[bytes]], None]) -> Union[list[list[str]], None]:
+    """Encode the effective_pgcs list of lists of binary signatures into a JSON compatible object.
+
+    Args
+    ----
+    obj is the list of lists of 32 byte binary signatures
+
+    Returns
+    -------
+    List of lists of base 64 encoded strings
+    """
+    if obj is None:
+        return None
+    
+    return [[b64encode(signature) for signature in layer] for layer in obj]
+
+
+def decode_effective_pgcs(obj:Union[list[list[str]], None]) -> Union[list[list[bytes]], None]:
+    """Encode the effective_pgcs list of lists of binary signatures into a JSON compatible object.
+
+    Args
+    ----
+    obj is the list of lists of base 64 encoded signature strings
+
+    Returns
+    -------
+    List of lists of binary signatures
+    """
+    if obj is None:
+        return None
+    
+    return [[b64decode(signature) for signature in layer] for layer in obj]
 
 
 def compress_json(obj):

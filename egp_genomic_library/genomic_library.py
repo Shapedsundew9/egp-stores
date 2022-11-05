@@ -122,6 +122,7 @@ _PTR_MAP = {
     'gcb': 'signature'
 }
 
+
 _GL_TABLE_SCHEMA = deepcopy(GMS_TABLE_SCHEMA)
 with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_ptr:
     merge(_GL_TABLE_SCHEMA, load(file_ptr))

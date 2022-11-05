@@ -158,18 +158,6 @@
         "min": 1,
         "type": "integer"
     },
-    "effective_pgc_fitness": {
-        "default": [],
-        "meta": {
-            "description": "pGC's that's most recent application have a positive effect on the fitness of this GC's ancestry."
-        },
-        "schema": {
-            "max": 1.0,
-            "min": 0.0,
-            "type": "float"
-        },
-        "type": "list"
-    },
     "evolvability": {
         "check_with": "valid_evolvability",
         "default": 1.0,

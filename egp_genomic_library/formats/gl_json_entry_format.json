@@ -11,9 +11,6 @@
     "creator": {
         "coerce": "UUID_str_to_UUID"
     },
-    "effective_pgcs": {
-        "coerce": "signature_str_list_to_binary_list"
-    },
     "gca": {
         "coerce": "signature_str_to_binary"
     },
