@@ -5,7 +5,6 @@ The GMS is a abstract base class for retrieving genetic codes.
 
 from random import randint
 from logging import DEBUG, NullHandler, getLogger
-# TODO: Move to graph_tool for efficiency
 from graph_tool import Graph, Vertex
 from graph_tool.topology import label_out_component, all_paths
 from numpy.random import choice as weighted_choice

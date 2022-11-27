@@ -39,7 +39,7 @@ def test_graph_construction(test_case_idx):
         vertex_size=50,
         vertex_text=gms.graph.new_vertex_property("string", [gc[gms.nl] for gc in gms.graph.vertex_properties[_OBJECT]]),
         edge_pen_width=8,
-        output=f'test_graph_construction_{test_case_idx}.png'
+        output=join(dirname(__file__), f'../logs/test_graph_construction_{test_case_idx}.png')
     )
     for node in test_case:
         if node['expected_gc_count'] != node[_GC_COUNT]:

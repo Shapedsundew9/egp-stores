@@ -9,10 +9,11 @@ from functools import partial
 
 from pypgtable import table
 
-from .gl_json_entry_validator import entry_validator, merge
 from .genetic_material_store import genetic_material_store, GMS_TABLE_SCHEMA
 from .utils.text_token import register_token_code, text_token
-from .conversions import *
+from egp_types.conversions import *
+from egp_types.gc_type_tools import merge
+from egp_types.xgc_validator import LGC_json_entry_validator
 
 
 _logger = getLogger(__name__)
@@ -202,7 +203,7 @@ class genomic_library(genetic_material_store):
                 abspath = join(_DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
                 with open(abspath, "r") as file_ptr:
-                    self.library.insert((entry_validator.normalized(entry) for entry in load(file_ptr)))
+                    self.library.insert((LGC_json_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def __getitem__(self, signature):
         """Recursively select genetic codes starting with 'signature'.
@@ -303,7 +304,7 @@ class genomic_library(genetic_material_store):
         """
         self._logger.debug("Normalizing {} entries.".format(len(entries)))
         for signature, entry in entries.items():
-            entries[signature] = entry_validator.normalized(entry)
+            entries[signature] = LGC_json_entry_validator.normalized(entry)
             entries[signature]['_calculated'] = False
         for entry in entries.values():
             self._calculate_fields(entry, entries)
@@ -312,9 +313,9 @@ class genomic_library(genetic_material_store):
         check_list = set(entries.keys)
         for entry in entries.values():
             del entry['_calculated']
-            if not entry_validator.validate(entry):
+            if not LGC_json_entry_validator.validate(entry):
                 self._logger.error(str(text_token({'E03001': {
-                    'errors': pformat(entry_validator.errors, width=180),
+                    'errors': pformat(LGC_json_entry_validator.errors, width=180),
                     'entry': pformat(entry, width=180)}})))
                 raise ValueError('Genomic library entry invalid.')
             references = [entry['gca'], entry['gcb']]
