@@ -1,6 +1,6 @@
 [submodule "genomic_library/utils"]
 	path = genomic_library/utils
 	url = git@github.com:Shapedsundew9/utils.git
-[submodule "egp_genomic_library/utils"]
-	path = egp_genomic_library/utils
+[submodule "egp_stores/utils"]
+	path = egp_stores/utils
 	url = git@github.com:Shapedsundew9/utils.git

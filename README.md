@@ -1,1 +1,1 @@
-# egp-genomic-library
+# egp-stores

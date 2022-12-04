@@ -62,7 +62,7 @@ jobs:
       run: |
         pip install pytest
         pip install pytest-cov
-        pytest --doctest-modules --junitxml=junit/test-results.xml --cov=egp_genomic_library --cov-report=xml --cov-report=html --cov-config=.coveragerc --cov-branch
+        pytest --doctest-modules --junitxml=junit/test-results.xml --cov=egp_stores --cov-report=xml --cov-report=html --cov-config=.coveragerc --cov-branch
     - name: Upload coverage to Codecov
       # https://github.com/marketplace/actions/codecov
       uses: codecov/codecov-action@v1

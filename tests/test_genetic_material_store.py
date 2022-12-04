@@ -9,8 +9,8 @@ from json import load
 from logging import NullHandler, getLogger
 from graph_tool.draw import graph_draw
 
-from egp_genomic_library import genetic_material_store, _CODON_COUNT, _GC_COUNT
-from egp_genomic_library.genetic_material_store import _OBJECT
+from egp_stores import genetic_material_store, _CODON_COUNT, _GC_COUNT
+from egp_stores.genetic_material_store import _OBJECT
 
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())

@@ -25,7 +25,7 @@ setup(
     # There are some restrictions on what makes a valid project name
     # specification here:
     # https://packaging.python.org/specifications/core-metadata/#name
-    name='egp-genomic-library',  # Required
+    name='egp-stores',  # Required
 
     # Versions should comply with PEP 440:
     # https://www.python.org/dev/peps/pep-0440/
@@ -66,7 +66,7 @@ setup(
     #
     # This field corresponds to the "Home-Page" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#home-page-optional
-    url='https://github.com/Shapedsundew9/egp-genomic-library',  # Optional
+    url='https://github.com/Shapedsundew9/egp-stores',  # Optional
 
     # This should be your name or the name of the organization which owns the
     # project.
@@ -124,7 +124,7 @@ setup(
     #   py_modules=["my_module"],
     #
     # packages=find_packages(where=''),  # Required
-    packages=['egp_genomic_library', 'egp_genomic_library.utils'],
+    packages=['egp_stores', 'egp_stores.utils'],
 
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
@@ -155,7 +155,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional
-        'egp_genomic_library': ['formats/*.json', 'data/*.json'],
+        'egp_stores': ['formats/*.json', 'data/*.json'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
@@ -188,7 +188,7 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        'Bug Reports': 'https://github.com/Shapedsundew9/egp-genomic-library/issues',
-        'Source': 'https://github.com/Shapedsundew9/egp-genomic-library',
+        'Bug Reports': 'https://github.com/Shapedsundew9/egp-stores/issues',
+        'Source': 'https://github.com/Shapedsundew9/egp-stores',
     },
 )
