@@ -1,0 +1,99 @@
+{
+    "layer": {
+        "type": "INT",
+        "description": "The layer for which this row is relevant."
+    },
+    "count": {
+        "type": "INT",
+        "description": "The number of individuals in the layer."
+    },
+    "f_max": {
+        "type": "REAL",
+        "description": "The maximum fitness for the population."
+    },
+    "f_mean": {
+        "type": "REAL",
+        "description": "The mean fitness for the population."
+    },
+    "f_dist": {
+        "type": "INT[10]",
+        "description": "The relative fraction of the population in an even distribution of bins between 0.0 and 1.0."
+    },
+    "f_min": {
+        "type": "REAL",
+        "description": "The minimum fitness for the population."
+    },
+    "e_max": {
+        "type": "REAL",
+        "description": "The maximum evolvability for the population."
+    },
+    "e_mean": {
+        "type": "REAL",
+        "description": "The mean evolvability for the population."
+    },
+    "e_min": {
+        "type": "REAL",
+        "description": "The minimum fitness for the population."
+    },
+    "g_max": {
+        "type": "BIGINT",
+        "description": "The maximum generation for the population."
+    },
+    "g_mean": {
+        "type": "REAL",
+        "description": "The mean generation for the population."
+    },
+    "g_min": {
+        "type": "BIGINT",
+        "description": "The minimum generation for the population."
+    },
+    "gcc_max": {
+        "type": "INT",
+        "description": "The maximum number of GC's making up any individual."
+    },
+    "gcc_mean": {
+        "type": "REAL",
+        "description": "The mean number of GC's making up any individual."
+    },
+    "gcc_min": {
+        "type": "BIGINT",
+        "description": "The minimum number of GC's making up any individual."
+    },
+    "cc_max": {
+        "type": "INT",
+        "description": "The maximum number of codons making up any individual."
+    },
+    "cc_mean": {
+        "type": "REAL",
+        "description": "The mean number of codons making up any individual."
+    },
+    "cc_min": {
+        "type": "BIGINT",
+        "description": "The minimum number of codons making up any individual."
+    },
+    "evolutions": {
+        "type": "INT",
+        "description": "The number of evolutions in this layer."
+    },
+    "eps": {
+        "type": "REAL",
+        "description": "The number of evolutions per second."
+    },
+    "performance": {
+        "type": "REAL",
+        "description": "The performance of this layer. See docs for definition of performance."
+    },
+    "tag": {
+        "type": "INT2",
+        "description": "An arbitary tag grouping rows."
+    },
+    "worker_id": {
+        "type": "BIGINT",
+        "description": "The ID of the worker writing this row."
+    },
+    "created": {
+        "default": "(NOW() AT TIME ZONE 'UTC')",
+        "type": "TIMESTAMP",
+        "description": "The time at which the layer statistics were calculated. This is the end of the target layer epoch."
+    }
+}

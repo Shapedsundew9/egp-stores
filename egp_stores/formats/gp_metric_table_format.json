@@ -1,0 +1,51 @@
+{
+    "f_dist": {
+        "type": "INT2[100]",
+        "description": "Fitness distribution of target layer. Numpy histogram (https://numpy.org/doc/stable/reference/generated/numpy.histogram.html) with 100 bins of the range 0.0 to 1.0."
+    },
+    "e_dist": {
+        "type": "INT2[100]",
+        "description": "Evolvability distribution of target layer. Numpy histogram (https://numpy.org/doc/stable/reference/generated/numpy.histogram.html) with 100 bins of the range 0.0 to 1.0."
+    },
+    "efficiency": {
+        "type": "REAL",
+        "description": "The efficiency of the gene pool. See docs for the definition of efficiency."
+    },
+    "pgc_evolutions": {
+        "type": "BIGINT",
+        "description": "The total number of evolutions of pGC's."
+    },
+    "target_evolutions": {
+        "type": "BIGINT",
+        "description": "The total number of evolutions of target individuals."
+    },
+    "pgc_reuse_max": {
+        "type": "INT2",
+        "description": "The maximum number of layers any one pGC is reused in (excluding the random pGC)."
+    },
+    "pgc_reuse_avg": {
+        "type": "REAL",
+        "description": "The mean number of layers a pGC is reused in (excluding the random pGC)."
+    },
+    "sgc_reuse_max": {
+        "type": "INT",
+        "description": "The maximum number of reuses of a non-codon sub-GC."
+    },
+    "sgc_reuse_avg": {
+        "type": "REAL",
+        "description": "The mean number of reuses of a non-codon sub-GC."
+    },
+    "worker_id": {
+        "type": "BIGINT",
+        "description": "The ID of the worker writing this row."
+    },
+    "tag": {
+        "type": "INT2",
+        "description": "An arbitary tag grouping rows."
+    },
+    "created": {
+        "default": "(NOW() AT TIME ZONE 'UTC')",
+        "type": "TIMESTAMP",
+        "description": "The time at which the layer statistics were calculated. This is the end of the target layer epoch."
+    }
+}

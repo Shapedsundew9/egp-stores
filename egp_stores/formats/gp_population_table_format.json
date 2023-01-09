@@ -1,0 +1,56 @@
+{
+    "uid": {
+        "type": "SERIAL",
+        "description": "Integer UID of the population."
+    },
+    "last_owner_id": {
+        "default": 0,
+        "type": "INTEGER",
+        "description": "The most recently allocated owner UID."
+    },
+    "worker_id": {
+        "type": "BIGINT",
+        "description": "The ID of the worker that created the population."
+    },
+    "size":  {
+        "type": "INT",
+        "description": "Number of individuals in the target layer with the idx defined in this row."
+    },
+    "inputs": {
+        "type": "VARCHAR",
+        "description": "JSON list of valid EP_TYPE_STRs defining the target individuals inputs."
+    },
+    "outputs": {
+        "type": "VARCHAR",
+        "description": "JSON list of valid EP_TYPE_STRs defining the target individuals outputs."
+    },
+    "oih": {
+        "type": "BIGINT",
+        "description": "The ordered interface hash. Is used to verify all individuals meet the population interface requirements."
+    },
+    "name": {
+        "primary_key": true,
+        "type": "VARCHAR",
+        "description": "User defined arbitrary short name used as a unique identifier."
+    },
+    "description": {
+        "nullable": true,
+        "type": "VARCHAR",
+        "description": "User defined arbitrary long description."
+    },
+    "meta_data": {
+        "nullable": true,
+        "type": "VARCHAR",
+        "description": "User defined arbitary field."
+    },
+    "created": {
+        "default": "(NOW() AT TIME ZONE 'UTC')",
+        "type": "TIMESTAMP",
+        "description": "The time at which the population entry was created."
+    },
+    "last_gl_pull": {
+        "default": "(NOW() AT TIME ZONE 'UTC')",
+        "type": "TIMESTAMP",
+        "description": "The last time the genomic library was searched for suitable GCs."
+    }
+}
