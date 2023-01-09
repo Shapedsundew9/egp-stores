@@ -1,27 +1,33 @@
 {
     "_e_count": {
         "default": "0",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "ggc_only": true
     },
     "_evolvability": {
         "default": "0.0",
-        "type": "REAL"
+        "type": "REAL",
+        "ggc_only": true
     },
     "_pgc_e_count": {
         "nullable": true,
-        "type": "INTEGER[16]"
+        "type": "INTEGER[16]",
+        "pgc_only": true
     },
     "_pgc_evolvability": {
         "nullable": true,
-        "type": "REAL[16]"
+        "type": "REAL[16]",
+        "pgc_only": true
     },
     "_pgc_f_count": {
         "nullable": true,
-        "type": "INTEGER[16]"
+        "type": "INTEGER[16]",
+        "pgc_only": true
     },
     "_pgc_fitness": {
         "nullable": true,
-        "type": "REAL[16]"
+        "type": "REAL[16]",
+        "pgc_only": true
     },
     "_reference_count": {
         "default": "0",
@@ -29,11 +35,13 @@
     },
     "ac_count": {
         "default": "0",
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "volatile": true
     },
     "alpha_class": {
         "default": "ARRAY[0.0, 0.0, 0.0, 0.0]",
-        "type": "REAL[4]"
+        "type": "REAL[4]",
+        "volatile": true
     },
     "code_depth": {
         "default": "0",
@@ -49,11 +57,15 @@
     },
     "e_count": {
         "default": "1",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "volatile": true,
+        "ggc_only": true
     },
     "evolvability": {
         "default": "1.0",
-        "type": "REAL"
+        "type": "REAL",
+        "volatile": true,
+        "ggc_only": true
     },
     "generation": {
         "default": "0",
@@ -74,7 +86,9 @@
     },
     "meta_data": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "volatile": true,
+        "init_only": true
     },
     "num_codes": {
         "default": "0",
@@ -112,19 +126,27 @@
     },
     "pgc_e_count": {
         "nullable": true,
-        "type": "INTEGER[16]"
+        "type": "INTEGER[16]",
+        "volatile": true,
+        "pgc_only": true
     },
     "pgc_evolvability": {
         "nullable": true,
-        "type": "REAL[16]"
+        "type": "REAL[16]",
+        "volatile": true,
+        "pgc_only": true
     },
     "pgc_f_count": {
         "nullable": true,
-        "type": "INTEGER[16]"
+        "type": "INTEGER[16]",
+        "volatile": true,
+        "pgc_only": true
     },
     "pgc_fitness": {
         "nullable": true,
-        "type": "REAL[16]"
+        "type": "REAL[16]",
+        "volatile": true,
+        "pgc_only": true
     },
     "properties": {
         "default": "0",

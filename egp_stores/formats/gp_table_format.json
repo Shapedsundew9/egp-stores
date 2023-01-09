@@ -1,11 +1,13 @@
 {
     "_f_count": {
         "nullable": true,
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "ggc_only": true
     },
     "_fitness": {
         "nullable": true,
-        "type": "REAL"
+        "type": "REAL",
+        "ggc_only": true
     },
     "ancestor_a_ref": {
         "nullable": true,
@@ -17,11 +19,15 @@
     },
     "f_count": {
         "nullable": true,
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "volatile": true,
+        "ggc_only": true
     },
     "fitness": {
         "nullable": true,
-        "type": "REAL"
+        "type": "REAL",
+        "volatile": true,
+        "ggc_only": true
     },
     "gca_ref": {
         "nullable": true,
@@ -37,30 +43,37 @@
     "lc": {
         "nullable": true,
         "type": "SMALLINT",
-        "description": "The line count of the callable."
+        "description": "The line count of the callable.",
+        "init_only": true
     },
     "next_pgc_ref": {
         "description": "An intergenerational pGC can specify the next pGC to operate on this GC with this field.",
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "volatile": true
     },
     "offspring_count": {
         "default": "0",
-        "type": "INTEGER"
+        "type": "INTEGER",
+        "volatile": true
     },
     "pgc_f_valid": {
         "description": "For PGCs. True if the PGC is valid in the layer else False. TODO: This could be optimised to a SMALLINT.",
         "nullable": true,
-        "type": "BOOLEAN[16]"
+        "type": "BOOLEAN[16]",
+        "volatile": true,
+        "pgc_only": true
     },
     "pgc_ref": {
+        "default": "null",
         "nullable": true,
         "type": "BIGINT"
     },
     "population_uid": {
         "description": "TODO: Population will be defined by reference (as class will be).",
         "nullable": true,
-        "type": "SMALLINT"
+        "type": "SMALLINT",
+        "ggc_only": true
     },
     "ref": {
         "primary_key": true,
@@ -73,6 +86,7 @@
     },
     "survivability": {
         "default": "0.0",
-        "type": "REAL"
+        "type": "REAL",
+        "ggc_only": true
     }
 }
