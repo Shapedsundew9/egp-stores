@@ -10,23 +10,25 @@ from numpy.core.fromnumeric import mean
 from numpy.random import choice
 from numpy import array, float32, sum, count_nonzero, where, finfo, histogram, isfinite, concatenate, argsort, logical_and
 from .genetic_material_store import genetic_material_store
-from .gene_pool_table_schema import GP_TABLE_SCHEMA
+from .gene_pool_common import GP_TABLE_SCHEMA
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
-from .genomic_library import UPDATE_STR, UPDATE_RETURNING_COLS, sql_functions, HIGHER_LAYER_COLS, _GL_TABLE_SCHEMA
+from .genomic_library import UPDATE_STR, sql_functions, GL_HIGHER_LAYER_COLS, GL_TABLE_SCHEMA, GL_SIGNATURE_COLUMNS
 from egp_types.ep_type import asstr, vtype, asint, interface_definition, ordered_interface_hash
-from egp_types.gc_type_tools import NUM_PGC_LAYERS, is_pgc, ref_str, reference
+from egp_types.gc_type_tools import NUM_PGC_LAYERS, is_pgc
+from .gene_pool_common import reference, ref_from_sig, ref_str, GP_HIGHER_LAYER_COLS, GP_REFERENCE_COLUMNS, GP_UPDATE_RETURNING_COLS
 from egp_types.eGC import eGC
 from egp_physics.physics import stablize, population_GC_evolvability, pGC_fitness, select_pGC, RANDOM_PGC_SIGNATURE
 from egp_physics.physics import population_GC_inherit
 from egp_types.gc_graph import gc_graph
+from egp_types.xgc_validator import GGC_entry_validator
 from egp_execution.execution import set_gms, create_callable
-from .gene_pool_cache import gene_pool_cache, xGC
+from .gene_pool_cache import gene_pool_cache, xGC, GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS
 from time import time, sleep
 from pypgtable import table
 from functools import partial
 from uuid import uuid4
 from typing import Dict, List, Tuple, Any, Callable, Iterable
-from itertools import count
+
 
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -34,7 +36,6 @@ _logger.addHandler(NullHandler())
 _LOG_DEBUG = _logger.isEnabledFor(DEBUG)
 
 
-_UPDATE_RETURNING_COLS = tuple((c for c in filter(lambda x: x != 'signature', UPDATE_RETURNING_COLS))) + ('ref',)
 _POPULATION_IN_DEFINITION = -1
 _MAX_INITIAL_LIST = 100000
 _MIN_PGC_LAYER_SIZE = 100
@@ -89,16 +90,15 @@ with open(join(dirname(__file__), "formats/gp_pgc_metrics_format.json"), "r") as
 
 
 # GC queries
-_GL_EXCLUDE_COLUMNS = ('ancestor_a', 'ancestor_b', 'creator')
-_GL_COLUMNS = tuple(k for k in _GL_TABLE_SCHEMA.keys() if k not in _GL_EXCLUDE_COLUMNS)
+_LOAD_GL_COLUMNS = tuple(k for k in GL_TABLE_SCHEMA.keys() if k not in GL_HIGHER_LAYER_COLS)
 _LAST_OWNER_ID_QUERY_SQL = 'WHERE uid = {uid}'
-_LAST_OWNER_ID_UPDATE_SQL = "{last_owner_id} = ({last_owner_id} + 1) & x'FFFFFFFF')"
+_LAST_OWNER_ID_UPDATE_SQL = "{last_owner_id} = (({last_owner_id}::BIGINT + 1::BIGINT) & x'7FFFFFFF::BIGINT)::INTEGER')"
 _REF_SQL = 'WHERE ({ref} = ANY({matches}))'
 _SIGNATURE_SQL = 'WHERE ({signature} = ANY({matches}))'
 _LOAD_GPC_SQL = ('WHERE {population} = {population_uid} ORDER BY {survivability} DESC LIMIT {limit}')
 _LOAD_PGC_SQL = ('WHERE {pgc_f_count}[{layer}] > 0 AND NOT({ref} = ANY({exclusions})) '
                  'ORDER BY {pgc_fitness}[{layer}] DESC LIMIT {limit}')
-_LOAD_CODONS_SQL = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0ea764f':UUID"
+_LOAD_CODONS_SQL = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0ea764f'"
 
 
 # The gene pool default config
@@ -157,27 +157,6 @@ _DEFAULT_CONFIGS = {
     "population_metrics": _DEFAULT_POPULATION_METRICS_CONFIG,
     "pgc_metrics": _DEFAULT_PGC_METRICS_CONFIG,
 }
-
-
-def reference(owner:int, counters:Dict[int, count]) -> int:
-    """Create a unique reference.
-
-    It is assumed that after the 2**32th owner the 1st owner ID
-    will be available again without risk to uniqueness.
-
-    It is also assumed limiting the 
-
-    Args
-    ----
-    owner: 32 bit unsigned integer uniquely identifying the counter to be used.
-
-    Returns
-    -------
-    Signed 64 bit integer reference.
-    """
-    if owner not in counters:
-        counters[owner] = count(2**32)
-    return (counters[owner] + (owner << 32)) & 0xFFFFFFFFFFFFFFFF
 
 
 def default_config() -> Dict[str, Dict[str, Any]]:
@@ -277,11 +256,12 @@ class gene_pool(genetic_material_store):
         self._population_data = {}
         self._populations_table = table(configs['populations'])
         self._owner_counters = {}
-        self.reference = partial(reference, counters=self._owner_counters)
+        self.reference_function = partial(reference, counters=self._owner_counters)
         # FIXME: Start population UID's at 0 with https://www.postgresql.org/docs/9.1/sql-altersequence.html
         if self._populations_table.raw.creator:
             _logger.info(f'This worker ({self.worker_id}) is the Populations table creator.')
-        self.spuid = self.get_next_spuid()
+        self.owner_id = self.next_owner_id()
+        self._next_reference = partial(self.reference_function, owner=self.owner_id)
         self.populations()
         _logger.info('Population(s) established.')
 
@@ -297,7 +277,7 @@ class gene_pool(genetic_material_store):
             _logger.info(f'This worker ({self.worker_id}) is the Gene Pool table creator.')
             self._pool.raw.arbitrary_sql(sql_functions(), read=False)
 
-    def get_next_owner_id(self):
+    def next_owner_id(self):
         """Get the next available owner UID."""
         return next(self._populations_table.update(_LAST_OWNER_ID_UPDATE_SQL, _LAST_OWNER_ID_QUERY_SQL,
             returning=('last_owner_id',), container='tuple'))[0]
@@ -315,7 +295,7 @@ class gene_pool(genetic_material_store):
         4. Pull in the pGC's that created all the selected population & sub-gGCs
         5. Pull in the best pGC's at each layer.
         """
-        self.pool.update({codon['ref']:codon for codon in self._pool(_LOAD_CODONS_SQL)})
+        self.pull_from_gl(self._pool(_LOAD_CODONS_SQL, columns=('signature'), container='tuple'))
         for population in filter(lambda x: 'characterize' in x, self._population_data.values()):
             literals = {'limit': population['size'], 'population_uid': population['uid']}
             for num, ggc in enumerate(self._pool.select(_LOAD_GPC_SQL, literals), start=1):
@@ -487,10 +467,32 @@ class gene_pool(genetic_material_store):
             self.pool.update(fgc_dict)
             _logger.debug(f'Created GGCs to add to Gene Pool: {[ref_str(ggc["ref"]) for ggc in (rgc, *fgc_dict.values())]}')
 
+    def _ref_from_sig(self, sig:bytes) -> int:
+        """Convert a signature to a reference handling clashes.
+        
+        Args
+        ----
+        sig: Genomic Library signature
+
+        Returns
+        -------
+        64 bit reference. See reference() for bitfields.
+        """
+        ref = ref_from_sig(sig)
+        if ref in self.pool and self.pool[ref]['signature'] != sig:
+            shift = 0
+            while ref in self.pool and self.pool[ref]['signature'] != sig:
+                _logger.warn(f"Hashing clash at shift {shift} for {ref_str(ref)} and {sig.hexdigest()}.")
+                # FIXME: Shift can be used if we can do an atomic update of the GP database
+                assert not shift
+                ref = ref_from_sig(sig, shift:=shift + 1)
+                assert shift < 193, f"193 consecutive hashing clashes. Hmmmm!"
+        return ref
+
     def pull_from_gl(self, signatures, population_uid=None):
         """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
 
-        aGC's are converted to gGC's.
+        LGC's are converted to gGC's.
         Higher layer fields are updated.
         Nodes & edges are added the the GP graph.
         SHA256 signatures are replaced by GP references.
@@ -504,68 +506,72 @@ class gene_pool(genetic_material_store):
         """
         if _LOG_DEBUG:
             _logger.debug(f'Recursively pulling {signatures} into Gene Pool for population {population_uid}.')
-        gcs = tuple(self._gl.recursive_select(_SIGNATURE_SQL, {'matches': signatures}, _GL_COLUMNS))
+        sig_ref_map = {}
+        for ggc in self._gl.recursive_select(_SIGNATURE_SQL, {'matches': signatures}, _LOAD_GL_COLUMNS):
+            if population_uid is not None and ggc['signature'] in signatures:
+                ggc['population_uid'] = population_uid
 
+            # Map signatures to references
+            sig_ref_map.update({ggc[field]: self._ref_from_sig(ggc[field]) for field in GL_SIGNATURE_COLUMNS})
+            ggc.update({field + '_ref': sig_ref_map(ggc['field']) for field in GL_SIGNATURE_COLUMNS if field != 'signature'})
+            ggc['ref'] = sig_ref_map(ggc['signature'])
 
+            # Set the higher layer fields
+            # A higher layer field starts with an underscore '_' and has an underscoreless counterpart.
+            # e.g. '_field' and 'field'. The _field holds the value of field when the GC was pulled from
+            # the higher layer. i.e. after being pulled from the GMS _field must = field. field can then
+            # be modified by the lower layer. NB: Updating the value back into the GMS is a bit more complex.
+            ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
 
-        ggcs = gGC([gc for gc in gcs if gc['signature'] in signatures], population_uid=population_uid)
-        self._gl.hl_copy(ggcs)
-        if _LOG_DEBUG:
-            _logger.debug("Adding sub-GC's")
-        ggcs = gGC((gc for gc in gcs if gc['signature'] not in signatures))
-        self._gl.hl_copy(ggcs)
+            # Push to GP
+            updates = next(self._pool.upsert((ggc,), self._update_str, {}, GP_UPDATE_RETURNING_COLS))
+            ggc.update(updates)
+
+            # Push to GPC
+            ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
+            self.pool[ggc['ref']] = ggc
+            if _LOG_DEBUG:
+                assert GGC_entry_validator(ggc), "GGC is not valid!"
 
     def push_to_gp(self):
         """Insert or update locally modified gGC's into the persistent gene_pool.
 
         NOTE: This *MUST* be the only function pushing GC's to the persistent GP.
         """
-        # TODO: This can be optimised to further minimise the amount of data munging of unmodified values.
-        # TODO: Check for dodgy values that are not just bad logic e.g. overflows
-        modified_gcs = [gc for gc in filter(_MODIFIED_FUNC, self.pool.values())]
         if _LOG_DEBUG:
             _logger.debug(f'Validating GP DB entries.')
-            for gc in modified_gcs:
-                if not gp_entry_validator(dict(gc)):
-                    _logger.debug(','.join([f'{k}: {type(v)}({v})' for k, v in gc.items()]))
-                    _logger.error(f'gGC invalid:\n{gp_entry_validator.error_str()}.')
-                    raise ValueError('gGC is invalid. See log.')
+            updated_gcs = []
+            modified_gcs = tuple(self.pool.modified(full=True))
+            for ggc in modified_gcs:
+                if not GGC_entry_validator(ggc):
+                    _logger.error(f'Modified gGC invalid:\n{GGC_entry_validator.error_str()}.')
+                    raise ValueError('Modified gGC is invalid. See log.')
+ 
+        for updated_gc in self._pool.upsert(self.pool.modified(), self._update_str, {}, GPC_UPDATE_RETURNING_COLS):
+            ggc = self.pool[updated_gc['ref']]
+            ggc['__modified__'] = False
+            ggc.update(updated_gc)
+            ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
+            if _LOG_DEBUG:
+                updated_gcs.append(ggc)
 
-        # Add to the node graph
-        self.add_nodes(modified_gcs)
+        if _LOG_DEBUG:
+            modified_in_gpc = tuple((ref_str(v['ref']) for v in self.pool.modified()))
+            assert not len(), f"Modified gGCs were not written to the GP: {modified_in_gpc}"
+            assert len(modified_gcs) == len(updated_gcs), "The number of updated and modified gGCs differ!"
 
-        # FIXME: Use excluded columns depending on new or modified and pGC or not.
-        for updated_gc in self._pool.upsert(modified_gcs, self._update_str, {}, _UPDATE_RETURNING_COLS):
-            gc = self.pool[updated_gc['ref']]
-            gc.update(updated_gc)
-            for col in HIGHER_LAYER_COLS:  # FIXME: Wrong definition - should be GP higher layer cols & use hl_copy().
-                gc[col] = gc[col[1:]]
+            # Check updates are correct
+            for uggc, mggc in zip(updated_gcs, modified_gcs):
+                if not GGC_entry_validator(uggc):
+                    _logger.error(f'Updated gGC invalid:\n{GGC_entry_validator.error_str()}.')
+                    raise ValueError('Updated gGC is invalid. See log.')
 
-        for gc in modified_gcs:
-            gc['modified'] = False
+                # Sanity the read-only fields
+                for field in filter(lambda x: mggc.fields[x].get('read_only', False), mggc.fields):
+                    assert uggc[field] == mggc[field], "Read-only fields must remain unchanged!"
 
-    def delete_from_gp_cache(self, refs):
-        """Delete GCs from the gene pool.
-
-        If ref is not in the pool it is ignored.
-        If ref is aliased by a signature both the signature & ref entries are deleted.
-
-        Args
-        ----
-        refs(iterable(int)): GC 'ref' values to delete.
-        """
-        # TODO: Does this get rid of orphaned sub-GC's & otherwise unused pGC's?
-        refs = self.remove_nodes(refs)
-        _logger.info(f'Removing {len(refs)} GCs from GP local cache.')
-        for ref in refs:
-            # The gGC object cleans up all its memory (including the executable function)
-            del self.pool[ref]
-        # if refs:
-            # FIXME: How does this work if another worker is using the GC?
-            # 7-May-2022: I think the GP DB is only cleaned up in the parent process which
-            # relieves issues for sub-processes. Parallel (remote) processes using the
-            # same GP DB upsert so there is no risk.
-            # self._pool.delete('{ref} in {ref_tuple}', {'ref_tuple': refs})
+                # Writable fields may not have changed. Only one we can be sure of is 'updated'.
+                assert uggc['updated'] > mggc['updated'], "Updated timestamp must be newer!"
 
     def individuals(self, identifier=0):
         """Return a generator of individual gGCs for a population.

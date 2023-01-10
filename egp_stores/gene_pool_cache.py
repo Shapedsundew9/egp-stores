@@ -47,11 +47,11 @@ from functools import partial
 from egp_types.eGC import eGC
 from egp_types.mGC import mGC
 from egp_types.GGC import GGC
-from egp_types.gc_type_tools import merge, ref_str, is_pgc
+from egp_types.gc_type_tools import merge, is_pgc
 from copy import deepcopy
-from numpy import bool_, int64, int32, int16, float32, float64, full
+from numpy import bool_, uint32, int64, int32, int16, float32, float64, full
 from re import search
-from .gene_pool_table_schema import GP_TABLE_SCHEMA
+from .gene_pool_common import GP_TABLE_SCHEMA, ref_str
 from json import load
 from os.path import dirname, join
 
@@ -59,7 +59,6 @@ from os.path import dirname, join
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 _LOG_DEBUG = _logger.isEnabledFor(DEBUG)
-_SUPPRESS_VALIDATION = not _LOG_DEBUG 
 
 # If this field exists and is not None the gGC is a pGC
 _PROOF_OF_PGC = 'pgc_fitness'
@@ -69,6 +68,9 @@ _REGEX = r'([A-Z]*)\[{0,1}(\d{0,})\]{0,1}'
 GPC_TABLE_SCHEMA = deepcopy(GP_TABLE_SCHEMA)
 with open(join(dirname(__file__), "formats/gpc_table_format.json"), "r") as file_ptr:
     merge(GPC_TABLE_SCHEMA, load(file_ptr))
+GPC_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', GPC_TABLE_SCHEMA)))
+GPC_UPDATE_RETURNING_COLS = tuple((x[1:] for x in GPC_HIGHER_LAYER_COLS)) + ('updated', 'created')
+GPC_REFERENCE_COLUMNS = tuple((key for key, _ in filter(lambda x: x[1].get('reference', False), GPC_TABLE_SCHEMA.items())))
 
 # Lazy add igraph
 sql_np_mapping = {
@@ -92,19 +94,30 @@ sql_np_mapping = {
     'SMALLSERIAL': int16
 }
 
-
-def _test_helper():
-    """Needed to suppress deep validation of GGC() initialization when testing."""
-    global _SUPPRESS_VALIDATION
-    _SUPPRESS_VALIDATION = True
+_MODIFIED = {
+    'type': bool,
+    'length': 1,
+    'default': False,
+    'read_only': False
+}
 
 
 def create_cache_config(table_format_json: Dict[str, Dict[str, str|int|float]]) -> Dict[str, Dict[str, Any]]:
     """Converts the Gene Pool table format to a GPC config.
     
+    | Field | Type | Default | Description |
+    ------------------------------
+    | volatile | bool | False | True if the field may be written to after creation |
+    | ggc_only | bool | False | True if field only present in non-pGC GC's |
+    | pgc_only | bool | False | True if field only present in pGC GC's |
+    | indexed  | bool | False | Set to True for large sparsely defined fields |
+
+    Sparsely defined fields with > 4 bytes storage (e.g. > int32) can save memory by
+    being stored as a 32 bit index into a smaller store.
+
     Args
     ----
-    table_format_json: The normalized GP pypgtable format JSON
+    table_format_json: The normalized GP pypgtable format JSON with additikonal fields defined above.
 
     Returns
     -------
@@ -121,7 +134,7 @@ def create_cache_config(table_format_json: Dict[str, Dict[str, str|int|float]]) 
             typ = m.group(1)
         length = 1 if not len(m.group(2)) else int(m.group(2))
         cconfig[column] = {
-            'type': sql_np_mapping.get(typ, list),
+            'type': sql_np_mapping.get(typ, list) if not definition.get('indexed', False) else _indexed_store,
             'length': length,
             'default': sql_np_mapping[typ](0) if typ in sql_np_mapping else None,
             'read_only': not definition.get('volatile', False)
@@ -142,7 +155,7 @@ class xGC():
         self._data = _data
         self._allocation = allocation
         self._idx = idx
-        self._fields = fields
+        self.fields = fields
 
     def __contains__(self, key:str) -> bool:
         return key in self._data
@@ -150,17 +163,18 @@ class xGC():
     def __getitem__(self, key: str) -> Any:
         if _LOG_DEBUG:
             assert key in self._data, f"{key} is not a key in data. Are you trying to get a pGC field from a gGC?"
-            self._fields[key]['read_count'] += 1
+            self.fields[key]['read_count'] += 1
             _logger.debug(f"Getting GGC key '{key}' from allocation {self._allocation}, index {self._idx}).")
         return self._data[key][self._allocation][self._idx]
 
     def __setitem__(self, key: str, value: Any) -> None:
         if _LOG_DEBUG:
             assert key in self._data, f"'{key}' is not a key in data. Are you trying to set a pGC field in a gGC?"
-            assert not self._fields[key]['read_only'], f"Writing to read-only field '{key}'."
-            self._fields[key]['write_count'] += 1
+            assert not self.fields[key]['read_only'], f"Writing to read-only field '{key}'."
+            self.fields[key]['write_count'] += 1
             _logger.debug(f"Setting GGC key '{key}' to allocation {self._allocation}, index {self._idx}).")
         self._data[key][self._allocation][self._idx] = value
+        self._data['__modified__'][self._allocation][self._idx] = True
 
     def __copy__(self):
         """Make sure we do not copy gGCs."""
@@ -238,12 +252,17 @@ def allocate(data:Dict[str, List[Any]], delta_size:int, fields:Dict[str, Dict[st
     fields: Definition of data fields
     """
     # This is ordered so read-only fields are allocated together for CoW performance.
+    size = 2**delta_size
+    indexed_stores = {}
     for key, value in sorted(fields.items(), key=lambda x: x[1].get('read_only', True)):
-        shape = 2**delta_size if value.get('length', 1) == 1 else (2**delta_size, value['length'])
-        if not isinstance(value['type'], list):
+        shape = size if value.get('length', 1) == 1 else (size, value['length'])
+        if isinstance(value['type'], list):
+            data[key].append([value['default']] * size)
+        elif not isinstance(value['type'], _indexed_store):
             data[key].append(full(shape, value['default'], dtype=value['type']))
         else:
-            data[key].append([value['default']] * 2**delta_size)
+            istore = indexed_stores[key] if key in indexed_stores else _indexed_store(value, size)
+            data[key].append(istore.allocate())
 
 class devnull():
 
@@ -255,9 +274,9 @@ class devnull():
 
     def __setitem__(self, k, v):
         pass
-
-class _gpc():
-    """Mapping to a GC stored in the gene pool cache."""
+ 
+class _store():
+    """Store data compactly with a dict like interface."""
 
     def __init__(self, fields: Dict[str, Dict[str, Any]] = {}, delta_size:int = 16) -> None:
         """Create a _gpc object.
@@ -279,6 +298,9 @@ class _gpc():
         delta_size: The log2(minimum number) of entries to add to the allocation when space runs out.
         """
         self.fields = deepcopy(fields)
+        self.fields['__modified__'] = deepcopy(_MODIFIED)
+        self.writable_fields = {k:v for k, v in self.fields if not v['read_only']}
+        self.read_only_fields = {k:v for k, v in self.fields if v['read_only']}
         self.delta_size = delta_size
         self.ref_to_idx = {}
         self._data = {k: [] for k in self.fields.keys()}
@@ -288,6 +310,7 @@ class _gpc():
         self._empty_list = []
         _allocate = partial(allocate, data=self._data, delta_size=delta_size, fields=self.fields)
         self._idx = next_idx_generator(delta_size, self._empty_list, _allocate)
+        next(self._idx) # Allocation 0, index 0 = None
         if _LOG_DEBUG:
             for value in self.fields.values():
                 value['read_count'] = 0
@@ -313,7 +336,8 @@ class _gpc():
         -------
         True if ref is present.
         """
-        return ref in self.ref_to_idx
+        # Reference 0 = None which is not in the GPC
+        return ref in self.ref_to_idx if ref else False
 
     def __delitem__(self, ref:int) -> None:
         """Remove the entry for ref from the GPC.
@@ -322,6 +346,8 @@ class _gpc():
         ----
         ref: GPC unique GC reference.
         """
+        # Reference 0 is None which is not in the GPC
+        if not ref: raise KeyError("Cannot delete the 0 (null) reference).")
         full_idx = self.ref_to_idx[ref]
         del self.ref_to_idx[ref]
 
@@ -344,6 +370,8 @@ class _gpc():
         -------
         dict-like GC record.        
         """
+        # Reference 0 is None which is not in the GPC
+        if not ref: raise KeyError("Cannot read the 0 (null) reference).")
         full_idx = self.ref_to_idx[ref]
         allocation = full_idx >> self.delta_size
         idx = full_idx & self._idx_mask
@@ -366,22 +394,27 @@ class _gpc():
         ref: The GC unique reference in the GP.
         value: A dict-like object defining at least the required fields of a gGC.
         """
+        if not ref: raise KeyError("Cannot set the 0 (null) reference.")
         full_idx = self.ref_to_idx.get(ref)
         if full_idx is None:
+            modified = False
             full_idx = next(self._idx)
             self.ref_to_idx[ref] = full_idx
             if _LOG_DEBUG:
                 _logger.debug("Ref does not exist in the GPC generating full index.")
+        else:
+            modified = True
         allocation = full_idx >> self.delta_size
         idx = full_idx & self._idx_mask
         if _LOG_DEBUG:
             _logger.debug(f"Setting GGC ref {ref_str(ref)} to allocation {allocation},"
                 f" index {idx} (full index = {full_idx:08x}).")
+        self._data['__modified__'][allocation][idx] = modified
         for k, v in value.items():
             # None means not set i.e. allocation default.
             if v is not None:
                 self._data.get(k, self._devnull)[allocation][idx] = v
-                if _LOG_DEBUG:
+                if _LOG_DEBUG and k in self.fields:
                     self.fields[k]['write_count'] += 1
                     _logger.debug(f"Setting GGC key '{k}' to {self._data.get(k, self._devnull)[allocation][idx]}).")
 
@@ -412,16 +445,77 @@ class _gpc():
         """A view of the gGCs in the GPC."""
         for ref in self.ref_to_idx.keys():
             yield self[ref]
+
+    def modified(self, full:bool = False) -> xGC:
+        """A view of the modified gGCs in the GPC.
         
+        Args
+        ---
+        full: If True the full xGC is return else only the writable fields.
+
+        Returns
+        -------
+        Each modified xGC.
+        """
+        fields = self.fields if full else self.writable_fields
+        for full_idx in self.ref_to_idx.values():
+            allocation = full_idx >> self.delta_size
+            idx = full_idx & self._idx_mask
+            if self._data['__modified__'][allocation][idx]:
+                yield xGC(self._data, allocation, idx, fields)
+
+
+class _indexed_store_allocation():
+
+    def __init__(self, store):
+        self._data = store._data
+        self._empty_set = store._empty_list
+        self._allocation = full((store._size,), 0, dtype=uint32)
+
+    def __getitem__(self, idx):
+        return self._data[self._allocation[idx]]
+
+    def __setitem__(self, idx, value):
+        if not self._empty_set:
+            empty_idx = self._empty_set.pop()
+            self._allocation[idx] = empty_idx
+            self._data[empty_idx] = value
+        else:
+            self._allocation[idx] = len(self._data)
+            self._data.append(value)
+
+    def __delitem__(self, idx):
+            deleted_idx = self._allocation[idx] 
+            self._allocation[idx] = 0
+            if deleted_idx:
+                self._data[deleted_idx] = None
+                self._empty_set.add(deleted_idx)
+                
+
+class _indexed_store():
+
+    def __init__(self, size):
+        self._data = [None]
+        self._size = size
+        self._empty_set = set()
+        self._num_allocations = 0
+    
+    def allocate(self):
+        self._num_allocations += 1
+        return _indexed_store_allocation(self)
+    
+    def __del__(self):
+        _logger.debug(f"{len(self._data)} elements in indexed store versus {self._size * self._num_allocations} allocated.") 
+    
 
 class gene_pool_cache():
     
     def __init__(self, delta_size: int = 17) -> None:
         fields = filter(lambda x: not x[1].get('init_only', False) and not x[1].get('pgc_only', False), GPC_TABLE_SCHEMA.items())
-        self._gGC_cache = _gpc(create_cache_config(dict(fields)), delta_size)
+        self._gGC_cache = _store(create_cache_config(dict(fields)), delta_size)
         self._gGC_refs = self._gGC_cache.ref_to_idx
         fields = filter(lambda x: not x[1].get('init_only', False) and not x[1].get('ggc_only', False), GPC_TABLE_SCHEMA.items())
-        self._pGC_cache = _gpc(create_cache_config(dict(fields)), delta_size)
+        self._pGC_cache = _store(create_cache_config(dict(fields)), delta_size)
         self._pGC_refs = self._pGC_cache.ref_to_idx
 
 
@@ -525,3 +619,19 @@ class gene_pool_cache():
             yield self[ref]
         for ref in self._pGC_refs.keys():
             yield self[ref]
+
+    def modified(self, full:bool = False) -> xGC:
+        """A view of the modified gGCs in the GPC.
+        
+        Args
+        ---
+        full: If True the full xGC is return else only the writable fields.
+
+        Returns
+        -------
+        Each modified xGC.
+        """
+        for gGC in self._gGC_cache.modified(full):
+            yield gGC
+        for pGC in self._pGC_cache.modified(full):
+            yield pGC

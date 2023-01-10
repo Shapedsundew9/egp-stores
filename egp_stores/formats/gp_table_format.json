@@ -1,21 +1,13 @@
 {
-    "_f_count": {
-        "nullable": true,
-        "type": "INTEGER",
-        "ggc_only": true
-    },
-    "_fitness": {
-        "nullable": true,
-        "type": "REAL",
-        "ggc_only": true
-    },
     "ancestor_a_ref": {
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "ancestor_b_ref": {
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "f_count": {
         "nullable": true,
@@ -31,11 +23,13 @@
     },
     "gca_ref": {
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "gcb_ref": {
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "igraph": {
         "type": "BYTEA"
@@ -50,7 +44,8 @@
         "description": "An intergenerational pGC can specify the next pGC to operate on this GC with this field.",
         "nullable": true,
         "type": "BIGINT",
-        "volatile": true
+        "volatile": true,
+        "reference": true
     },
     "offspring_count": {
         "default": "0",
@@ -67,7 +62,8 @@
     "pgc_ref": {
         "default": "null",
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "population_uid": {
         "description": "TODO: Population will be defined by reference (as class will be).",
@@ -77,16 +73,19 @@
     },
     "ref": {
         "primary_key": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "sms_ref": {
         "description": "The SMS this GC was created by if it was net positive for fitness.",
         "nullable": true,
-        "type": "BIGINT"
+        "type": "BIGINT",
+        "reference": true
     },
     "survivability": {
         "default": "0.0",
         "type": "REAL",
-        "ggc_only": true
+        "ggc_only": true,
+        "volatile": true
     }
 }

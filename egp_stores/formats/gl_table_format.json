@@ -1,34 +1,42 @@
 {
     "ancestor_a": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "ancestor_b": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "creator": {
         "nullable": true,
-        "type": "UUID"
+        "type": "UUID",
+        "signature": true
     },
     "gca": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "gcb": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "pgc": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "signature": {
         "primary_key": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     },
     "sms": {
         "nullable": true,
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "signature": true
     }
 }

@@ -1,4 +1,5 @@
-from egp_stores.gene_pool_cache import gene_pool_cache, _test_helper
+import pytest
+from egp_stores.gene_pool_cache import gene_pool_cache
 from egp_types.xgc_validator import GGC_entry_validator
 from surebrec.surebrec import generate, _logger as _surebrec_logger
 from egp_types.gc_type_tools import is_pgc, ref_str
@@ -10,6 +11,7 @@ from math import isclose
 from numpy import ndarray
 from typing import Any
 
+
 _surebrec_logger.setLevel(INFO)
 _logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -20,9 +22,6 @@ GGC_entry_validator.schema['inputs']['required'] = True
 GGC_entry_validator.schema['outputs']['required'] = True
 _TEST_DATA = {ggc['ref']: ggc for ggc in generate(GGC_entry_validator, 100, -1022196250, True)}
 
-# Needed to suppress deep validation of GGC initialization which will fail
-# with the randomly generated _TEST_DATA
-_test_helper()
 
 def element_is_match(a: Any, b: Any) -> bool:
     """Custom matching function.
@@ -142,6 +141,7 @@ def test_delete_update():
     dict_is_match(dct, gpc, removed=removed[1::2])
 
 
+@pytest.mark.skip(reason="Benchmerking value only.")
 def test_write_performance():
     dct = {}
     gpc = gene_pool_cache()

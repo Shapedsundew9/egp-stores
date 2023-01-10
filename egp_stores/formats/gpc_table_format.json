@@ -1,3 +1,10 @@
 {
-
+    "signature": {
+        "description": "Only stored for GCs coming from the Genomic Library.",
+        "type": "BYTEA",
+        "indexed": true,
+        "nullable": true,
+        "default": "null",
+        "signature": true
+    }
 }

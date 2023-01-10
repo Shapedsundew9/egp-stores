@@ -66,12 +66,12 @@ _CONVERSIONS = (
 )
 
 
-_GL_TABLE_SCHEMA = deepcopy(GMS_TABLE_SCHEMA)
+GL_TABLE_SCHEMA = deepcopy(GMS_TABLE_SCHEMA)
 with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_ptr:
-    merge(_GL_TABLE_SCHEMA, load(file_ptr))
-HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', _GL_TABLE_SCHEMA)))
-UPDATE_RETURNING_COLS = tuple((x[1:] for x in HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
-
+    merge(GL_TABLE_SCHEMA, load(file_ptr))
+GL_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', GL_TABLE_SCHEMA)))
+GL_UPDATE_RETURNING_COLS = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
+GL_SIGNATURE_COLUMNS = tuple((key for key, _ in filter(lambda x: x[1].get('signature', False), GL_TABLE_SCHEMA.items())))
 
 # The default config
 _DEFAULT_CONFIG = {
@@ -80,7 +80,7 @@ _DEFAULT_CONFIG = {
     },
     'table': 'genomic_library',
     'ptr_map': _PTR_MAP,
-    'schema': _GL_TABLE_SCHEMA,
+    'schema': GL_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
     'conversions': _CONVERSIONS
@@ -138,7 +138,7 @@ class genomic_library(genetic_material_store):
         self.encode_value = self.library.encode_value
         self.select = self.library.select
         self.recursive_select = self.library.recursive_select
-        self.hl_copy = partial(super().hl_copy, field_names=HIGHER_LAYER_COLS)
+        self.hl_copy = partial(super().hl_copy, field_names=GL_HIGHER_LAYER_COLS)
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(sql_functions(), read=False)
             for data_file in _DATA_FILES:
@@ -281,7 +281,7 @@ class genomic_library(genetic_material_store):
             entries. Values will be normalised & updated in place
         """
         self._normalize(entries)
-        updated_entries = self.library.upsert(entries.values(), self._update_str, {}, UPDATE_RETURNING_COLS)
+        updated_entries = self.library.upsert(entries.values(), self._update_str, {}, GL_UPDATE_RETURNING_COLS)
         for updated_entry in updated_entries:
             entry = entries[updated_entry['signature']]
             entry.update(updated_entry)
