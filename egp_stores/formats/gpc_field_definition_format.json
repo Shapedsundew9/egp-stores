@@ -1,0 +1,32 @@
+{
+    "signature": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is a signature"
+    },
+    "ggc_only": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is only in gGC's"
+    },
+    "pgc_only": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is on in pGC's"
+    },
+    "indexed": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is must be indexed (defined for <50% of GC's and >4 byte object size)"
+    },
+    "init_only": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is does not need to be stored in the GPC (is only used at initialization)"
+    },
+    "reference": {
+        "type": "boolean",
+        "default": false,
+        "description": "True if the field is a reference"
+    }
+}

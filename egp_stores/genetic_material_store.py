@@ -86,7 +86,7 @@ UPDATE_STR = ','.join((
 
 # Data schema
 with open(join(dirname(__file__), "formats/gms_table_format.json"), "r") as file_ptr:
-    GMS_TABLE_SCHEMA = load(file_ptr)
+    GMS_RAW_TABLE_SCHEMA = load(file_ptr)
 
 
 class genetic_material_store():

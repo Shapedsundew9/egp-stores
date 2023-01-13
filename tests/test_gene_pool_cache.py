@@ -2,7 +2,8 @@ import pytest
 from egp_stores.gene_pool_cache import gene_pool_cache
 from egp_types.xgc_validator import GGC_entry_validator
 from surebrec.surebrec import generate, _logger as _surebrec_logger
-from egp_types.gc_type_tools import is_pgc, ref_str
+from egp_types.gc_type_tools import is_pgc
+from egp_types.reference import ref_str
 from logging import NullHandler, getLogger, INFO
 from time import time
 from pprint import pformat
@@ -10,7 +11,8 @@ from copy import deepcopy
 from math import isclose
 from numpy import ndarray
 from typing import Any
-
+from sys import getsizeof
+from pympler.asizeof import asizeof
 
 _surebrec_logger.setLevel(INFO)
 _logger = getLogger(__name__)
@@ -20,7 +22,7 @@ _logger.addHandler(NullHandler())
 # Test data conformant with GGC schema
 GGC_entry_validator.schema['inputs']['required'] = True
 GGC_entry_validator.schema['outputs']['required'] = True
-_TEST_DATA = {ggc['ref']: ggc for ggc in generate(GGC_entry_validator, 100, -1022196250, True)}
+_TEST_DATA = {ggc['ref']: ggc for ggc in generate(GGC_entry_validator, 127, -1022196250, True)}
 
 
 def element_is_match(a: Any, b: Any) -> bool:
@@ -84,6 +86,8 @@ def test_fill_element():
     for ggc in _TEST_DATA.values():
         _logger.debug(f"Adding entry {ref_str(ggc['ref'])}:\n{pformat(ggc, sort_dicts=True, indent=4)}")
         gpc[ggc['ref']] = ggc
+    _logger.info(f"Dict size: sys.getsizeof = {getsizeof(_TEST_DATA)} bytes, pympler.asizeof = {asizeof(_TEST_DATA)} bytes.")
+    _logger.info(f"GPC size: sys.getsizeof = {getsizeof(gpc)} bytes, pympler.asizeof = {asizeof(gpc)} bytes.")
     dict_is_match(_TEST_DATA, gpc)
 
 
@@ -141,7 +145,7 @@ def test_delete_update():
     dict_is_match(dct, gpc, removed=removed[1::2])
 
 
-@pytest.mark.skip(reason="Benchmerking value only.")
+@pytest.mark.skip(reason="Benchmarking value only.")
 def test_write_performance():
     dct = {}
     gpc = gene_pool_cache()

@@ -2,25 +2,25 @@
 
 from copy import deepcopy
 from json import load
-from logging import NullHandler, getLogger
+from logging import NullHandler, getLogger, Logger
 from os.path import dirname, join
 from pprint import pformat
 from functools import partial
 
 from pypgtable import table
 
-from .genetic_material_store import genetic_material_store, GMS_TABLE_SCHEMA, UPDATE_STR
-from .utils.text_token import register_token_code, text_token
+from .genetic_material_store import genetic_material_store, GMS_RAW_TABLE_SCHEMA, UPDATE_STR
+from egp_utils.text_token import register_token_code, text_token
 from egp_types.conversions import *
-from egp_types.gc_type_tools import merge
+from egp_utils.common import merge
 from egp_types.xgc_validator import LGC_json_entry_validator
+from typing import Literal, Any, LiteralString, Callable
 
-
-_logger = getLogger(__name__)
+_logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
-_NULL_GC_DATA = {
+_NULL_GC_DATA: dict[str, int | bool] = {
     'code_depth': 0,
     'num_codes': 0,
     'raw_num_codons': 1,
@@ -28,15 +28,15 @@ _NULL_GC_DATA = {
     'properties': 0,
     '_stored': True
 }
-_DATA_FILE_FOLDER = join(dirname(__file__), 'data')
-_DATA_FILES = ['codons.json', 'mutations.json']
+_DATA_FILE_FOLDER: str = join(dirname(__file__), 'data')
+_DATA_FILES: list[str] = ['codons.json', 'mutations.json']
 
 
 # Tree structure
-_LEL = 'gca'
-_REL = 'gcb'
-_NL = 'signature'
-_PTR_MAP = {
+_LEL: Literal['gca'] = 'gca'
+_REL: Literal['gcb'] = 'gcb'
+_NL: Literal['signature'] = 'signature'
+_PTR_MAP: dict[str, str] = {
     _LEL: _NL,
     _REL: _NL
 }
@@ -48,7 +48,7 @@ register_token_code('E03001', 'Entry is not valid: {errors}: {entry}')
 register_token_code('E03002', 'Referenced GC(s) {references} do not exist. Entry:\n{entry}:')
 
 
-_CONVERSIONS = (
+_CONVERSIONS: tuple[tuple[LiteralString, Callable[..., Any] | None, Callable[..., Any] | None], ...] = (
     ('graph', compress_json, decompress_json),
     ('meta_data', compress_json, decompress_json),
     ('signature', str_to_sha256, memoryview_to_bytes),
@@ -66,28 +66,28 @@ _CONVERSIONS = (
 )
 
 
-GL_TABLE_SCHEMA = deepcopy(GMS_TABLE_SCHEMA)
+GL_RAW_TABLE_SCHEMA: dict[str, Any] = deepcopy(GMS_RAW_TABLE_SCHEMA)
 with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_ptr:
-    merge(GL_TABLE_SCHEMA, load(file_ptr))
-GL_HIGHER_LAYER_COLS = tuple((key for key in filter(lambda x: x[0] == '_', GL_TABLE_SCHEMA)))
-GL_UPDATE_RETURNING_COLS = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
-GL_SIGNATURE_COLUMNS = tuple((key for key, _ in filter(lambda x: x[1].get('signature', False), GL_TABLE_SCHEMA.items())))
+    merge(GL_RAW_TABLE_SCHEMA, load(file_ptr))
+GL_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == '_', GL_RAW_TABLE_SCHEMA)))
+GL_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
+GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get('signature', False), GL_RAW_TABLE_SCHEMA.items())))
 
 # The default config
-_DEFAULT_CONFIG = {
+_DEFAULT_CONFIG: dict[str, Any] = {
     'database': {
         'dbname': 'erasmus'
     },
     'table': 'genomic_library',
     'ptr_map': _PTR_MAP,
-    'schema': GL_TABLE_SCHEMA,
+    'schema': GL_RAW_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
     'conversions': _CONVERSIONS
 }
 
 
-def default_config():
+def default_config() -> dict[str, Any]:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
@@ -99,7 +99,7 @@ def default_config():
     return deepcopy(_DEFAULT_CONFIG)
 
 
-def sql_functions():
+def sql_functions() -> str:
     """Load the SQL functions used by the genomic library & dependent repositiories of genetic material.
 
     SQL functions are used to update genetic code entries as they are an easy way to guarantee
@@ -121,7 +121,7 @@ class genomic_library(genetic_material_store):
     that is not in the genomic library.
     """
 
-    def __init__(self, config=_DEFAULT_CONFIG):
+    def __init__(self, config: dict[str, Any] =_DEFAULT_CONFIG) -> None:
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple
@@ -133,16 +133,16 @@ class genomic_library(genetic_material_store):
         config(pypgtable config): The config is deep copied by pypgtable.
         """
         super().__init__(node_label=_NL, left_edge_label=_LEL, right_edge_label=_REL)
-        self.library = table(config)
-        self._update_str = UPDATE_STR.replace('__table__', config['table'])
-        self.encode_value = self.library.encode_value
+        self.library: table = table(config)
+        self._update_str: str = UPDATE_STR.replace('__table__', config['table'])
+        self.encode_value: Callable[..., Any] = self.library.encode_value
         self.select = self.library.select
         self.recursive_select = self.library.recursive_select
         self.hl_copy = partial(super().hl_copy, field_names=GL_HIGHER_LAYER_COLS)
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(sql_functions(), read=False)
             for data_file in _DATA_FILES:
-                abspath = join(_DATA_FILE_FOLDER, data_file)
+                abspath: str = join(_DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
                 with open(abspath, "r") as file_ptr:
                     self.library.insert((LGC_json_entry_validator.normalized(entry) for entry in load(file_ptr)))
