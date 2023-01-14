@@ -2,19 +2,22 @@
 
 from copy import deepcopy
 from json import load
-from logging import NullHandler, getLogger, Logger
+from logging import Logger, NullHandler, getLogger
 from os.path import dirname, join
 from pprint import pformat
-from functools import partial
+from typing import Any, Callable, Iterable, Literal, LiteralString
 
-from pypgtable import table
-
-from .genetic_material_store import genetic_material_store, GMS_RAW_TABLE_SCHEMA, UPDATE_STR
-from egp_utils.text_token import register_token_code, text_token
-from egp_types.conversions import *
-from egp_utils.common import merge
+from egp_types.conversions import (compress_json, decompress_json,
+                                   encode_properties, memoryview_to_bytes,
+                                   str_to_datetime, str_to_sha256, str_to_UUID)
 from egp_types.xgc_validator import LGC_json_entry_validator
-from typing import Literal, Any, LiteralString, Callable
+from egp_utils.common import merge
+from egp_utils.text_token import register_token_code, text_token
+from pypgtable import table
+from pypgtable.typing import RowIter
+
+from .genetic_material_store import (GMS_RAW_TABLE_SCHEMA, UPDATE_STR,
+                                     genetic_material_store)
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -71,7 +74,8 @@ with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_
     merge(GL_RAW_TABLE_SCHEMA, load(file_ptr))
 GL_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == '_', GL_RAW_TABLE_SCHEMA)))
 GL_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
-GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get('signature', False), GL_RAW_TABLE_SCHEMA.items())))
+GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(
+    lambda x: x[1].get('signature', False), GL_RAW_TABLE_SCHEMA.items())))
 
 # The default config
 _DEFAULT_CONFIG: dict[str, Any] = {
@@ -121,7 +125,7 @@ class genomic_library(genetic_material_store):
     that is not in the genomic library.
     """
 
-    def __init__(self, config: dict[str, Any] =_DEFAULT_CONFIG) -> None:
+    def __init__(self, config: dict[str, Any] = _DEFAULT_CONFIG) -> None:
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple
@@ -132,13 +136,12 @@ class genomic_library(genetic_material_store):
         ----
         config(pypgtable config): The config is deep copied by pypgtable.
         """
-        super().__init__(node_label=_NL, left_edge_label=_LEL, right_edge_label=_REL)
+        super().__init__()
         self.library: table = table(config)
         self._update_str: str = UPDATE_STR.replace('__table__', config['table'])
         self.encode_value: Callable[..., Any] = self.library.encode_value
-        self.select = self.library.select
-        self.recursive_select = self.library.recursive_select
-        self.hl_copy = partial(super().hl_copy, field_names=GL_HIGHER_LAYER_COLS)
+        self.select: Callable[..., RowIter] = self.library.select
+        self.recursive_select: Callable[..., RowIter] = self.library.recursive_select
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(sql_functions(), read=False)
             for data_file in _DATA_FILES:
@@ -147,7 +150,7 @@ class genomic_library(genetic_material_store):
                 with open(abspath, "r") as file_ptr:
                     self.library.insert((LGC_json_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
-    def __getitem__(self, signature):
+    def __getitem__(self, signature) -> Any:
         """Recursively select genetic codes starting with 'signature'.
 
         Args
@@ -160,8 +163,7 @@ class genomic_library(genetic_material_store):
         """
         return self.library[self.library.encode_value('signature', signature)]
 
-
-    def _check_references(self, references, check_list=set()):
+    def _check_references(self, references: Iterable[bytes], check_list: set[bytes] | None = None) -> list[bytes]:
         """Verify all the references exist in the genomic library.
 
         Genetic codes reference each other. A debugging check is to verify the
@@ -169,14 +171,16 @@ class genomic_library(genetic_material_store):
 
         Args
         ----
-        references(list): List of genetic code signatures to look up.
-        check_list(set): A set of known existing genetic codes signatures.
+        references: List of genetic code signatures to look up.
+        check_list: A set of known existing genetic codes signatures.
 
         Returns
         -------
         Empty list if all references exist else the signatures of missing references.
         """
-        naughty_list = []
+        if check_list is None:
+            check_list = set()
+        naughty_list: list[bytes] = []
         for reference in references:
             if self.library[reference] is None and reference not in check_list:
                 naughty_list.append(reference)
@@ -184,7 +188,7 @@ class genomic_library(genetic_material_store):
                 check_list.add(reference)
         return naughty_list
 
-    def _calculate_fields(self, entry, entries=None):
+    def _calculate_fields(self, entry: dict[str, Any], entries: dict[bytes, dict[str, Any]]) -> None:
         """Calculate the derived genetic code fields.
 
         Cerberus normalisation can only set fields based on the contents of the genetic code dictionary.
@@ -201,25 +205,23 @@ class genomic_library(genetic_material_store):
         """
         # TODO: Need to update references.
         # TODO: Check consistency for GC's that are already stored.
-        gca = _NULL_GC_DATA
+        gca: dict[str, int | bool] = _NULL_GC_DATA
         if not entry['gca'] is None:
             if entry['gca'] not in entries.keys():
                 if not self.library[entry['gca']]:
-                    self._logger.error(
-                        'entry["gca"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gca']))
-                    self._logger.error('Entries signature list: {}'.format(entries.keys()))
+                    _logger.error('entry["gca"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gca']))
+                    _logger.error('Entries signature list: {}'.format(entries.keys()))
             else:
                 gca = entries[entry['gca']]
                 if not gca['_calculated']:
                     self._calculate_fields(gca, entries)
 
-        gcb = _NULL_GC_DATA
+        gcb: dict[str, int | bool] = _NULL_GC_DATA
         if not entry['gcb'] is None:
             if entry['gcb'] not in entries.keys():
                 if not self.library[entry['gcb']]:
-                    self._logger.error(
-                        'entry["gcb"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gcb']))
-                    self._logger.error('Entries signature list: {}'.format(entries.keys()))
+                    _logger.error('entry["gcb"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gcb']))
+                    _logger.error('Entries signature list: {}'.format(entries.keys()))
             else:
                 gcb = entries[entry['gca']]
                 if not gcb['_calculated']:
@@ -233,7 +235,7 @@ class genomic_library(genetic_material_store):
             entry['properties'] = gca['properties'] | gcb['properties']
         entry['_calculated'] = True
 
-    def _normalize(self, entries):
+    def _normalize(self, entries: dict[bytes, dict[str, Any]]) -> None:
         """Normalize entries before storing. The entries are modified in place.
 
         Genetic code statistics and meta data are updated / created for storage
@@ -241,35 +243,32 @@ class genomic_library(genetic_material_store):
 
         Args
         ----
-        entries(dict): A dictionary entry['signature']: entry of genetic code dictionaries to be
+        entries: A dictionary entry['signature']: entry of genetic code dictionaries to be
             stored or updated in the genomic library.
         """
-        self._logger.debug("Normalizing {} entries.".format(len(entries)))
+        _logger.debug("Normalizing {} entries.".format(len(entries)))
         for signature, entry in entries.items():
             entries[signature] = LGC_json_entry_validator.normalized(entry)
             entries[signature]['_calculated'] = False
         for entry in entries.values():
             self._calculate_fields(entry, entries)
 
-        self._logger.debug("Validating normalised entries before storing.")
-        check_list = set(entries.keys)
+        _logger.debug("Validating normalised entries before storing.")
+        check_list: set[bytes] = set(entries.keys())
         for entry in entries.values():
             del entry['_calculated']
             if not LGC_json_entry_validator.validate(entry):
-                self._logger.error(str(text_token({'E03001': {
-                    'errors': pformat(LGC_json_entry_validator.errors, width=180),
-                    'entry': pformat(entry, width=180)}})))
+                _logger.error(
+                    str(text_token({'E03001': {'errors': LGC_json_entry_validator.error_str(),
+                        'entry': pformat(entry, width=180)}})))
                 raise ValueError('Genomic library entry invalid.')
-            references = [entry['gca'], entry['gcb']]
-            problem_references = self._check_references(references, check_list)
+            references: list[bytes] = [entry['gca'], entry['gcb']]
+            problem_references: list[bytes] = self._check_references(references, check_list)
             if problem_references:
-                self._logger.error(str(text_token({'E03002': {
-                    'entry': pformat(entry, width=180),
-                    'references': problem_references}})))
+                _logger.error(str(text_token({'E03002': {'entry': pformat(entry, width=180), 'references': problem_references}})))
                 raise ValueError('Genomic library entry invalid.')
 
-
-    def upsert(self, entries):
+    def upsert(self, entries: dict[bytes, dict[str, Any]]) -> None:
         """Insert or update into the genomic library.
 
         Validates, normalises and updates genetic code entries prior to storage. All input entries
@@ -277,11 +276,11 @@ class genomic_library(genetic_material_store):
 
         Args
         ----
-        entries (dict(dict)): keys are signatures and dicts are genetic code
+        entries: Keys are signatures and dicts are genetic code
             entries. Values will be normalised & updated in place
         """
         self._normalize(entries)
-        updated_entries = self.library.upsert(entries.values(), self._update_str, {}, GL_UPDATE_RETURNING_COLS)
+        updated_entries: RowIter = self.library.upsert(entries.values(), self._update_str, {}, GL_UPDATE_RETURNING_COLS)
         for updated_entry in updated_entries:
-            entry = entries[updated_entry['signature']]
+            entry: dict[str, Any] = entries[updated_entry['signature']]
             entry.update(updated_entry)

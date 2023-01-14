@@ -36,6 +36,13 @@ The memory used by python3 3.10.6 is 10 + 100 = 110 MB. (1085 MB for 1,000,000)
 
 That is a saving of 4x.
 
+The saving get compunded when considering a dict of dict.
+Actual results from a random 127 element GPC:
+14:01:30 INFO test_gene_pool_cache.py 93 Dict size: sys.getsizeof = 4688 bytes, pympler.asizeof = 5399488 bytes.
+14:01:30 INFO test_gene_pool_cache.py 94 GPC size: sys.getsizeof = 56 bytes, pympler.asizeof = 204576 bytes.
+
+That is a saving of 25x.
+
 For read-only GC's in the persistent Gene Pool loaded on startup ~75% of the data
 is read only avoiding 4x as many CoW's giving a total factor of ~16x for that data.
 Bit of an anti-pattern for python but in this case the savings are worth it.
@@ -49,13 +56,13 @@ from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from re import Match, search
-from typing import Any, Callable, Generator, Literal, NoReturn, Self, TypedDict
-from pprint import pformat
+from typing import Any, Callable, Generator, Literal, NoReturn, Self
 
 from egp_types.eGC import eGC
 from egp_types.gc_type_tools import is_pgc
 from egp_types.GGC import GGC
 from egp_types.mGC import mGC
+from egp_types.xGC import xGC, Field
 from egp_types.reference import ref_str
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
@@ -71,8 +78,6 @@ _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 
-# If this field exists and is not None the gGC is a pGC
-_PROOF_OF_PGC: Literal['pgc_fitness'] = 'pgc_fitness'
 _REGEX: Literal['([A-Z]*)\\[{0,1}(\\d{0,})\\]{0,1}'] = r'([A-Z]*)\[{0,1}(\d{0,})\]{0,1}'
 
 
@@ -88,17 +93,6 @@ class ConfigDefinition(SchemaColumn):
     signature: bool
     init_only: bool
     reference: bool
-
-
-class Field(TypedDict):
-    """GPC configured field definition."""
-
-    type: Any
-    length: int
-    default: Any
-    read_only: bool
-    read_count: int
-    write_count: int
 
 
 # Load the GPC config definition which is a superset of the pypgtable column definition
@@ -197,77 +191,6 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
 # In the short term (and may be in the long term as a validation reference)
 # the GPC is implemented as a dictionary and the 'optimised' access
 # functions emulated.
-
-class xGC():
-    """xGC is a dict-like object."""
-
-    def __init__(self, _data: dict[str, list[Any]], allocation: int, idx: int, fields: dict[str, Field]) -> None:
-        """xGC is a dict-like object with some specialisations for the GPC.
-
-        Args
-        ----
-        _data: Is the _gpc from which individual GC's are read & written.
-        allocation: Is the index of the allocation in the store for this GC.
-        idx: Is the index in the allocation.
-        fields: The definition of the fields in the xGC
-        """
-        self._data: dict[str, list[Any]] = _data
-        self._allocation: int = allocation
-        self._idx: int = idx
-        self.fields: dict[str, Field] = fields
-
-    def __contains__(self, key: str) -> bool:
-        """Checks if key is one of the fields in xGC."""
-        return key in self.fields
-
-    def __getitem__(self, key: str) -> Any:
-        """Return the value stored with key."""
-        if __debug__:
-            assert key in self.fields, f"{key} is not a key in data. Are you trying to get a pGC field from a gGC?"
-            self.fields[key]['read_count'] += 1
-            _logger.debug(f"Getting GGC key '{key}' from allocation {self._allocation}, index {self._idx}).")
-        return self._data[key][self._allocation][self._idx]
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        """Set the value stored with key."""
-        if __debug__:
-            assert key in self._data, f"'{key}' is not a key in data. Are you trying to set a pGC field in a gGC?"
-            assert not self.fields[key]['read_only'], f"Writing to read-only field '{key}'."
-            self.fields[key]['write_count'] += 1
-            _logger.debug(f"Setting GGC key '{key}' to allocation {self._allocation}, index {self._idx}).")
-        self._data[key][self._allocation][self._idx] = value
-        self._data['__modified__'][self._allocation][self._idx] = True
-
-    def __copy__(self) -> NoReturn:
-        """Make sure we do not copy gGCs. This is for performance."""
-        assert False, f"Shallow copy of xGC ref {self['ref']:016X}."
-
-    def __deepcopy__(self, obj: Self) -> NoReturn:
-        """Make sure we do not copy gGCs. This is for performance."""
-        assert False, f"Deep copy of xGC ref {self['ref']:016X}."
-
-    def keys(self) -> dict_keys[str]:
-        """A view of the keys in the xGC."""
-        return self._data.keys()
-
-    def is_pgc(self) -> bool:
-        """True if the xGC is a pGC."""
-        return _PROOF_OF_PGC in self._data
-
-    def items(self) -> Generator[tuple[str, Any], None, None]:
-        """A view of the xGCs in the GPC."""
-        for key in self._data.keys():
-            yield key, self[key]
-
-    def update(self, value: dict | xGC) -> None:
-        """Update the xGC with a dict-like collection of fields."""
-        for k, v in value.items():
-            self[k] = v
-
-    def values(self) -> Generator[Any, None, None]:
-        """A view of the field values in the xGC."""
-        for key in self._data.keys():
-            yield self[key]
 
 
 def next_idx_generator(delta_size: int, empty_list: list[int], allocate_func: Callable[[], None]) -> Generator[int, None, None]:

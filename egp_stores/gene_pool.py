@@ -4,13 +4,14 @@ from copy import deepcopy
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import Any, Dict, Iterable, Literal
+from typing import Any, Iterable, Literal
 from uuid import UUID
 
 from egp_physics.physics import stablize
-from egp_population.typing import Population, Populations
+from egp_population.typing import PopulationNorm, PopulationsNorm
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
 from egp_types.eGC import eGC
+from egp_types.ep_type import vtype
 from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str
@@ -18,7 +19,8 @@ from egp_types.xgc_validator import GGC_entry_validator
 from numpy import histogram
 from numpy.core.fromnumeric import mean
 from pypgtable import table
-from pypgtable.typing import Conversions, PtrMap, TableConfig, TableSchema
+from pypgtable.typing import Conversions, PtrMap, TableConfig, TableConfigNorm, TableSchema
+from pypgtable.validators import raw_table_config_validator 
 
 from .gene_pool_cache import GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS, gene_pool_cache, xGC
 from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA, GP_UPDATE_RETURNING_COLS
@@ -116,7 +118,7 @@ _DEFAULT_CONFIGS: dict[str, TableConfig] = {
 }
 
 
-def default_config() -> Dict[str, TableConfig]:
+def default_config() -> dict[str, TableConfigNorm]:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
@@ -125,7 +127,7 @@ def default_config() -> Dict[str, TableConfig]:
     -------
     The default genomic_library() configuration.
     """
-    return deepcopy(_DEFAULT_CONFIGS)
+    return {k: raw_table_config_validator.normalized(v) for k, v in deepcopy(_DEFAULT_CONFIGS).items()}
 
 
 class gene_pool(genetic_material_store):
@@ -154,7 +156,7 @@ class gene_pool(genetic_material_store):
     """
     # TODO: Default genomic_library should be local host
 
-    def __init__(self, glib: genomic_library, populations: Populations, worker_id: UUID,
+    def __init__(self, populations: PopulationsNorm, worker_id: UUID, glib: genomic_library | None = None,
                  configs: dict[str, TableConfig] | None = None) -> None:
         """Connect to or create a gene pool.
 
@@ -172,9 +174,10 @@ class gene_pool(genetic_material_store):
         # in the database at the end of the target epoch.
         if configs is None:
             configs = _DEFAULT_CONFIGS
+        self._gl: genomic_library = genomic_library() if glib is None else glib
+
         self.pool: gene_pool_cache = gene_pool_cache()
         _logger.info('Gene Pool Cache created.')
-        self._gl: genomic_library = glib
         self._pool: table = table(configs['gp'])
         _logger.info('Established connection to Gene Pool table.')
 
@@ -189,7 +192,7 @@ class gene_pool(genetic_material_store):
 
         # Used to track the number of updates to individuals in a pGC layer.
         self.layer_evolutions: list[int] = [0] * NUM_PGC_LAYERS
-        self._populations: Populations = populations
+        self._populations: PopulationsNorm = populations
 
         # If this instance created the gene pool then it is responsible for configuring
         # setting up database functions and initial population.
@@ -224,7 +227,7 @@ class gene_pool(genetic_material_store):
                 for pgc in self._pool.select(_LOAD_PGC_SQL, literals):
                     self.pool[pgc['ref']] = pgc
 
-    def _new_population(self, population: Population, num: int) -> None:
+    def _new_population(self, population: PopulationNorm, num: int) -> None:
         """Fetch or create num target GC's & recursively pull in the pGC's that made them.
 
         Construct a population with inputs and outputs as defined by inputs, outputs & vt.
@@ -250,7 +253,7 @@ class gene_pool(genetic_material_store):
         # gene pool.
         _logger.info(f'{num} GGCs to create.')
         for _ in range(num):
-            egc: eGC = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=population['vt'])
+            egc: eGC = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=vtype.EP_TYPE_STR)
             rgc, fgc_dict = stablize(self._gl, egc)
 
             # Just in case it is trickier than expected.
@@ -258,7 +261,7 @@ class gene_pool(genetic_material_store):
             while rgc is None:
                 _logger.info('eGC random creation failed. Retrying...')
                 retry_count += 1
-                egc = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=population['vt'])
+                egc = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=vtype.EP_TYPE_STR)
                 rgc, fgc_dict = stablize(self._gl, egc)
                 if retry_count == 3:
                     raise ValueError(f"Failed to create eGC with inputs = {population['inputs']} and outputs"
@@ -333,7 +336,7 @@ class gene_pool(genetic_material_store):
             ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
             self.pool[ggc['ref']] = ggc
             if _LOG_DEBUG:
-                assert GGC_entry_validator(ggc), "GGC is not valid!"
+                assert GGC_entry_validator.validate(ggc), "GGC is not valid!"
 
     def push(self) -> None:
         """Insert or update locally modified gGC's into the persistent gene_pool.
@@ -348,7 +351,7 @@ class gene_pool(genetic_material_store):
             updated_gcs = []
             modified_gcs: list[xGC] = list(self.pool.modified(all_fields=True))
             for ggc in modified_gcs:
-                if not GGC_entry_validator(ggc):
+                if not GGC_entry_validator.validate(ggc):
                     _logger.error(f'Modified gGC invalid:\n{GGC_entry_validator.error_str()}.')
                     raise ValueError('Modified gGC is invalid. See log.')
 
@@ -367,7 +370,7 @@ class gene_pool(genetic_material_store):
 
             # Check updates are correct
             for uggc, mggc in zip(updated_gcs, modified_gcs):
-                if not GGC_entry_validator(uggc):
+                if not GGC_entry_validator.validate(uggc):
                     _logger.error(f'Updated gGC invalid:\n{GGC_entry_validator.error_str()}.')
                     raise ValueError('Updated gGC is invalid. See log.')
 
