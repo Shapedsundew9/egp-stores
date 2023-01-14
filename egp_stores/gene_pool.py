@@ -1,40 +1,29 @@
 """Gene pool management for Erasmus GP."""
 
 from copy import deepcopy
-from functools import partial
+from json import load
+from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from logging import DEBUG, INFO, WARN, ERROR, FATAL, NullHandler, getLogger, Logger
-from json import load, loads, dumps
-from random import random
-from numpy.core.fromnumeric import mean
-from numpy.random import choice
-from numpy import array, float32, sum, count_nonzero, where, finfo, histogram, isfinite, concatenate, argsort, logical_and
-from .genetic_material_store import genetic_material_store
-from .gene_pool_common import GP_RAW_TABLE_SCHEMA
-from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
-from .genomic_library import UPDATE_STR, sql_functions, GL_HIGHER_LAYER_COLS, GL_RAW_TABLE_SCHEMA, GL_SIGNATURE_COLUMNS
-from egp_types.ep_type import asstr, vtype, asint, interface_definition, ordered_interface_hash
-from egp_types.gc_type_tools import NUM_PGC_LAYERS, is_pgc
-from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_REFERENCE_COLUMNS, GP_UPDATE_RETURNING_COLS
-from egp_types.reference import reference, ref_from_sig, ref_str
-from egp_types.eGC import eGC
-from egp_physics.physics import stablize, population_GC_evolvability, pGC_fitness, select_pGC, RANDOM_PGC_SIGNATURE
-from egp_physics.physics import population_GC_inherit
-from egp_types.gc_graph import gc_graph
-from egp_types.xgc_validator import GGC_entry_validator
-from egp_execution.execution import set_gms, create_callable
-from .gene_pool_cache import gene_pool_cache, xGC, GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS
-from time import time, sleep
-from pypgtable import table
-from pypgtable.typing import DatabaseConfig, Conversions, PtrMap, TableSchema, TableConfig
-from functools import partial
-from uuid import uuid4
-from typing import Dict, List, Tuple, Any, Callable, Iterable, Generator, Literal, LiteralString, NewType
-from collections.abc import Sequence, Iterable
-from .genomic_library import genomic_library
+from typing import Any, Dict, Iterable, Literal
 from uuid import UUID
+
+from egp_physics.physics import stablize
 from egp_population.typing import Population, Populations
-from itertools import count
+from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
+from egp_types.eGC import eGC
+from egp_types.gc_graph import gc_graph
+from egp_types.gc_type_tools import NUM_PGC_LAYERS
+from egp_types.reference import ref_from_sig, ref_str
+from egp_types.xgc_validator import GGC_entry_validator
+from numpy import histogram
+from numpy.core.fromnumeric import mean
+from pypgtable import table
+from pypgtable.typing import Conversions, PtrMap, TableConfig, TableSchema
+
+from .gene_pool_cache import GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS, gene_pool_cache, xGC
+from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA, GP_UPDATE_RETURNING_COLS
+from .genetic_material_store import genetic_material_store
+from .genomic_library import GL_HIGHER_LAYER_COLS, GL_RAW_TABLE_SCHEMA, GL_SIGNATURE_COLUMNS, UPDATE_STR, genomic_library, sql_functions
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -42,23 +31,15 @@ _logger.addHandler(NullHandler())
 _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 
 
-_POPULATION_IN_DEFINITION: Literal[-1] = -1
-_MAX_INITIAL_LIST: Literal[100000] = 100000
-_MIN_PGC_LAYER_SIZE: Literal[100] = 100
-_MAX_PGC_LAYER_SIZE: Literal[10000] = 10000
-_MINIMUM_SUBPROCESS_TIME: Literal[60] = 60
-_MINIMUM_AVAILABLE_MEMORY: Literal[134217728] = 128 * 1024 * 1024
-_MAX_POPULATION_SIZE: Literal[100000] = 100000
-
-
-def compress_igraph(x) -> bytes | memoryview | bytearray | None:
+def compress_igraph(obj: gc_graph) -> bytes | memoryview | bytearray | None:
     """Extract the internal representation and compress."""
-    return compress_json(x.save())
+    return compress_json(obj.save())
 
 
-def decompress_igraph(x) -> gc_graph:
+def decompress_igraph(obj: bytes) -> gc_graph:
     """Create a gc_graph() from an decompressed internal representation."""
-    return gc_graph(internal=decompress_json(x))
+    return gc_graph(internal=decompress_json(obj))
+
 
 _GP_CONVERSIONS: Conversions = (
     ('graph', compress_json, decompress_json),
@@ -80,9 +61,9 @@ _PTR_MAP: PtrMap = {
     _PEL: _NL
 }
 
-with open(join(dirname(__file__), "formats/gp_metrics_table_format.json"), "r") as file_ptr:
+with open(join(dirname(__file__), "formats/gp_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
-with open(join(dirname(__file__), "formats/gp_pgc_metrics_format.json"), "r") as file_ptr:
+with open(join(dirname(__file__), "formats/gp_pgc_metrics_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_PGC_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
 
 
@@ -93,7 +74,7 @@ _REF_SQL: str = 'WHERE ({ref} = ANY({matches}))'
 _SIGNATURE_SQL: str = 'WHERE ({signature} = ANY({matches}))'
 _LOAD_GPC_SQL: str = ('WHERE {population} = {population_uid} ORDER BY {survivability} DESC LIMIT {limit}')
 _LOAD_PGC_SQL: str = ('WHERE {pgc_f_count}[{layer}] > 0 AND NOT({ref} = ANY({exclusions})) '
-                 'ORDER BY {pgc_fitness}[{layer}] DESC LIMIT {limit}')
+                      'ORDER BY {pgc_fitness}[{layer}] DESC LIMIT {limit}')
 _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0ea764f'"
 _LOAD_POPULATION_SQL: str = ('WHERE {population} = {population_uid} ORDER BY {survivability}')
 
@@ -169,10 +150,12 @@ class gene_pool(genetic_material_store):
 
     The public member self.pool is the local cache of gGC's. Querying or writing to
     the GP should only happen during an egp_physics.physics.proximity_search() or
-    when filling / flushing the GPC. 
+    when filling / flushing the GPC.
     """
     # TODO: Default genomic_library should be local host
-    def __init__(self, gl: genomic_library, populations: Populations, worker_id: UUID, configs: Dict[str, TableConfig] = _DEFAULT_CONFIGS) -> None:
+
+    def __init__(self, glib: genomic_library, populations: Populations, worker_id: UUID,
+                 configs: dict[str, TableConfig] | None = None) -> None:
         """Connect to or create a gene pool.
 
         The gene pool data persists in a postgresql database. Multiple
@@ -184,14 +167,14 @@ class gene_pool(genetic_material_store):
         genomic_library (genomic_library): Source of genetic material.
         config(pypgtable config): The config is deep copied by pypgtable.
         """
-        super().__init__(node_label=_NL, left_edge_label=_LEL, right_edge_label=_REL)
-
         # pool is a python2 type dictionary-like object of ref:gGC
         # All gGC's in pool must be valid & any modified are sync'd to the gene pool table
         # in the database at the end of the target epoch.
+        if configs is None:
+            configs = _DEFAULT_CONFIGS
         self.pool: gene_pool_cache = gene_pool_cache()
         _logger.info('Gene Pool Cache created.')
-        self._gl: genomic_library = gl
+        self._gl: genomic_library = glib
         self._pool: table = table(configs['gp'])
         _logger.info('Established connection to Gene Pool table.')
 
@@ -215,7 +198,6 @@ class gene_pool(genetic_material_store):
             # FIXME: How are other workers held back until this is executed?
             self._pool.raw.arbitrary_sql(sql_functions(), read=False)
 
-
     def _populate_local_cache(self) -> None:
         """Gather the latest and greatest from the GP.
 
@@ -237,20 +219,18 @@ class gene_pool(genetic_material_store):
                 self.pool[ggc['ref']] = ggc
             literals = {'limit': population['size']}
             for layer in range(NUM_PGC_LAYERS):
-                literals['exclusions'] = self.pool.pGC_refs()
+                literals['exclusions'] = self.pool.pgc_refs()
                 literals['layer'] = layer
                 for pgc in self._pool.select(_LOAD_PGC_SQL, literals):
                     self.pool[pgc['ref']] = pgc
 
-
-
-    def _new_population(self, population:Population, num:int) -> None:
+    def _new_population(self, population: Population, num: int) -> None:
         """Fetch or create num target GC's & recursively pull in the pGC's that made them.
 
         Construct a population with inputs and outputs as defined by inputs, outputs & vt.
         Inputs & outputs define the GC's interface.
 
-        There are 2 sources of valid individuals: The higher layer (GL in this case) or to 
+        There are 2 sources of valid individuals: The higher layer (GL in this case) or to
         create them.
         FIXME: Add pull from higher layer (recursively).
         FIXME: Implement forever work.
@@ -289,9 +269,9 @@ class gene_pool(genetic_material_store):
             self.pool.update(fgc_dict)
             _logger.debug(f'Created GGCs to add to Gene Pool: {[ref_str(ggc["ref"]) for ggc in (rgc, *fgc_dict.values())]}')
 
-    def _ref_from_sig(self, sig:bytes) -> int:
+    def _ref_from_sig(self, sig: bytes) -> int:
         """Convert a signature to a reference handling clashes.
-        
+
         Args
         ----
         sig: Genomic Library signature
@@ -304,14 +284,14 @@ class gene_pool(genetic_material_store):
         if ref in self.pool and self.pool[ref]['signature'] != sig:
             shift: int = 0
             while ref in self.pool and self.pool[ref]['signature'] != sig:
-                _logger.warn(f"Hashing clash at shift {shift} for {ref_str(ref)} and {sig.hex()}.")
+                _logger.warning(f"Hashing clash at shift {shift} for {ref_str(ref)} and {sig.hex()}.")
                 # FIXME: Shift can be used if we can do an atomic update of the GP database
                 assert not shift
-                ref = ref_from_sig(sig, shift:=shift + 1)
-                assert shift < 193, f"193 consecutive hashing clashes. Hmmmm!"
+                ref = ref_from_sig(sig, shift := shift + 1)
+                assert shift < 193, "193 consecutive hashing clashes. Hmmmm!"
         return ref
 
-    def pull(self, signatures:Iterable[bytes], population_uid: int | None = None) -> None:
+    def pull(self, signatures: Iterable[bytes], population_uid: int | None = None) -> None:
         """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
 
         LGC's are converted to gGC's.
@@ -364,14 +344,14 @@ class gene_pool(genetic_material_store):
         updated_gcs: list[xGC] = []
         modified_gcs: list[xGC] = updated_gcs
         if _LOG_DEBUG:
-            _logger.debug(f'Validating GP DB entries.')
+            _logger.debug('Validating GP DB entries.')
             updated_gcs = []
-            modified_gcs: list[xGC] = list(self.pool.modified(full=True))
+            modified_gcs: list[xGC] = list(self.pool.modified(all_fields=True))
             for ggc in modified_gcs:
                 if not GGC_entry_validator(ggc):
                     _logger.error(f'Modified gGC invalid:\n{GGC_entry_validator.error_str()}.')
                     raise ValueError('Modified gGC is invalid. See log.')
- 
+
         for updated_gc in self._pool.upsert(self.pool.modified(), self._update_str, {}, GPC_UPDATE_RETURNING_COLS):
             ggc: xGC = self.pool[updated_gc['ref']]
             ggc['__modified__'] = False
@@ -382,7 +362,7 @@ class gene_pool(genetic_material_store):
 
         if _LOG_DEBUG:
             modified_in_gpc: tuple[str, ...] = tuple((ref_str(v['ref']) for v in self.pool.modified()))
-            assert not len(modified_gcs), f"Modified gGCs were not written to the GP: {modified_in_gpc}"
+            assert not modified_gcs, f"Modified gGCs were not written to the GP: {modified_in_gpc}"
             assert len(modified_gcs) == len(updated_gcs), "The number of updated and modified gGCs differ!"
 
             # Check updates are correct
@@ -392,17 +372,16 @@ class gene_pool(genetic_material_store):
                     raise ValueError('Updated gGC is invalid. See log.')
 
                 # Sanity the read-only fields
-                for field in filter(lambda x: mggc.fields[x].get('read_only', False), mggc.fields):
+                for field in filter(lambda x: mggc.fields[x].get('read_only', False), mggc.fields):  # pylint: disable=cell-var-from-loop
                     assert uggc[field] == mggc[field], "Read-only fields must remain unchanged!"
 
                 # Writable fields may not have changed. Only one we can be sure of is 'updated'.
                 assert uggc['updated'] > mggc['updated'], "Updated timestamp must be newer!"
 
-
     def metrics(self) -> None:
         """Calculate and record metrics for the GP.
 
-        The data is based on the GPC and is calculated as a delta since the last call. 
+        The data is based on the GPC and is calculated as a delta since the last call.
         """
         self.pgc_metrics()
         self.gp_metrics()
@@ -410,7 +389,7 @@ class gene_pool(genetic_material_store):
     def pgc_metrics(self) -> None:
         """Per pGC layer metrics."""
         # FIXME: This could be way more memory and CPU efficient.
-        pgcs = [self.pool[ref] for ref in self.pool.pGC_refs()]
+        pgcs = [self.pool[ref] for ref in self.pool.pgc_refs()]
         for layer, evolutions in filter(lambda x: x[1], enumerate(self.layer_evolutions)):
             lpgcs = tuple(gc for gc in pgcs if gc['pgc_f_count'][layer])
             fitness = [individual['pgc_fitness'][layer] for individual in lpgcs]
@@ -438,11 +417,10 @@ class gene_pool(genetic_material_store):
                 'cc_mean': mean(c_count),
                 'cc_min': min(c_count),
                 'evolutions': evolutions,
-                'eps': evolutions, # FIXME: Needs to be per second
+                'eps': evolutions,  # FIXME: Needs to be per second
                 'performance': 0.0,
                 'tag': 0,
                 'worker_id': 0}])
 
     def gp_metrics(self) -> None:
         """Per pGC layer metrics."""
-        pass
