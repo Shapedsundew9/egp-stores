@@ -2,7 +2,7 @@
 from logging import Logger, NullHandler, getLogger
 from typing import Any, Iterable
 
-from egp_population.typing import Population
+from egp_population.typing import PopulationNorm
 from egp_stores.gene_pool import default_config as gp_default_config
 from egp_stores.gene_pool import gene_pool
 from egp_types.ep_type import vtype
@@ -10,8 +10,10 @@ from egp_types.xGC import xGC
 from numpy import arange, array, clip, float32, int32, isfinite, where
 from numpy.random import randint
 from numpy.typing import NDArray
-from pypgtable.typing import TableConfigNorm
+from pypgtable.typing import TableConfig
 from uuid import uuid4
+from hashlib import sha256
+from datetime import datetime
 
 from egp_stores.genomic_library import default_config as gl_default_config
 from egp_stores.genomic_library import genomic_library
@@ -28,10 +30,10 @@ _GL: genomic_library = genomic_library(_GL_CONFIG)
 
 
 # Gene pool config
-_GP_CONFIG: dict[str, TableConfigNorm] = gp_default_config()
+_GP_CONFIG: dict[str, TableConfig] = gp_default_config()
 for table in _GP_CONFIG:
     _GP_CONFIG[table]['delete_table'] = True
-    _GP_CONFIG[table]['database']['dbname'] = 'test_db'
+    _GP_CONFIG[table].setdefault('database', {})['dbname'] = 'test_db'
 
 
 # Divide! Characterization function
@@ -41,7 +43,7 @@ _X2_TEST: NDArray[float32] = where(_X2_TEST == 0, arange(100, dtype=float32), _X
 _Y_TEST: NDArray[float32] = _X1_TEST / _X2_TEST
 
 
-def characterize_divide(gc: xGC) -> tuple[float, float]:
+def characterize_divide(gc: xGC) -> float:
     """"Characterize gc for Divide!
 
     Fitness is 1 - the normalised clipped mean-squared-error of 100 random division examples.
@@ -74,7 +76,7 @@ def characterize_divide(gc: xGC) -> tuple[float, float]:
     _logger.debug(f'GC {gc["ref"]} MSE: {mse}')
     fitness: float = (float32(1.0) - mse).sum()
     _logger.debug(f'GC {gc["ref"]} fitness = {fitness}, survivability = {fitness}')
-    return fitness, fitness
+    return fitness
 
 
 def recharacterize_divide(gcs: Iterable[xGC]) -> tuple[float, ...]:
@@ -91,13 +93,20 @@ def recharacterize_divide(gcs: Iterable[xGC]) -> tuple[float, ...]:
 
 
 # A population config
-_DIV_CONFIG: Population = {
+_DIV_CONFIG: PopulationNorm = {
+    'uid': 1,
+    'worker_id': uuid4(),
+    'fitness_function_hash': sha256(b'random string').digest(),
     'size': 100,
     'name': 'Divide!',
     'inputs': ('float', 'float'),
     'outputs': ('float',),
-    'characterize': characterize_divide,
-    'recharacterize': recharacterize_divide,
+    'fitness_function': characterize_divide,
+    'survivability_function': recharacterize_divide,
+    'ordered_interface_hash': 123541235,
+    'meta_data': None,
+    'created': datetime.now(),
+    'vt': vtype.EP_TYPE_STR,
     'description': 'Input values are x1, x2. Desired return value, y, is x1/x2.'
 }
 
@@ -169,4 +178,4 @@ _FIT_CONFIG: dict[str, Any] = {
 
 def test_default_instanciation() -> None:
     """Simple instanciation."""
-    gene_pool({1: _DIV_CONFIG}, uuid4())
+    gene_pool({_DIV_CONFIG['name']: _DIV_CONFIG}, uuid4(), _GL, _GP_CONFIG)

@@ -4,14 +4,11 @@ from copy import deepcopy
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 from uuid import UUID
 
-from egp_physics.physics import stablize
-from egp_population.typing import PopulationNorm, PopulationsNorm
+from egp_population.typing import PopulationsNorm
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
-from egp_types.eGC import eGC
-from egp_types.ep_type import vtype
 from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str
@@ -19,8 +16,8 @@ from egp_types.xgc_validator import GGC_entry_validator
 from numpy import histogram
 from numpy.core.fromnumeric import mean
 from pypgtable import table
-from pypgtable.typing import Conversions, PtrMap, TableConfig, TableConfigNorm, TableSchema
-from pypgtable.validators import raw_table_config_validator 
+from pypgtable.typing import Conversions, PtrMap, TableConfig, TableSchema
+from pypgtable.validators import raw_table_config_validator
 
 from .gene_pool_cache import GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS, gene_pool_cache, xGC
 from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA, GP_UPDATE_RETURNING_COLS
@@ -59,13 +56,17 @@ _PEL: Literal['pgc_ref'] = 'pgc_ref'
 _NL: Literal['ref'] = 'ref'
 _PTR_MAP: PtrMap = {
     _LEL: _NL,
+    _REL: _NL
+}
+_PTR_MAP_PLUS_PGC: PtrMap = {
+    _LEL: _NL,
     _REL: _NL,
     _PEL: _NL
 }
 
 with open(join(dirname(__file__), "formats/gp_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
-with open(join(dirname(__file__), "formats/gp_pgc_metrics_format.json"), "r", encoding="utf8") as file_ptr:
+with open(join(dirname(__file__), "formats/gp_pgc_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_PGC_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
 
 
@@ -74,11 +75,10 @@ _LOAD_GL_COLUMNS: tuple[str, ...] = tuple(k for k in GL_RAW_TABLE_SCHEMA.keys() 
 _LOAD_GP_COLUMNS: tuple[str, ...] = tuple(k for k in GP_RAW_TABLE_SCHEMA.keys() if k not in GP_HIGHER_LAYER_COLS)
 _REF_SQL: str = 'WHERE ({ref} = ANY({matches}))'
 _SIGNATURE_SQL: str = 'WHERE ({signature} = ANY({matches}))'
-_LOAD_GPC_SQL: str = ('WHERE {population} = {population_uid} ORDER BY {survivability} DESC LIMIT {limit}')
+_LOAD_GPC_SQL: str = ('WHERE {population_uid} = {puid} ORDER BY {survivability} DESC LIMIT {limit}')
 _LOAD_PGC_SQL: str = ('WHERE {pgc_f_count}[{layer}] > 0 AND NOT({ref} = ANY({exclusions})) '
                       'ORDER BY {pgc_fitness}[{layer}] DESC LIMIT {limit}')
 _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0ea764f'"
-_LOAD_POPULATION_SQL: str = ('WHERE {population} = {population_uid} ORDER BY {survivability}')
 
 
 # The gene pool default config
@@ -118,7 +118,7 @@ _DEFAULT_CONFIGS: dict[str, TableConfig] = {
 }
 
 
-def default_config() -> dict[str, TableConfigNorm]:
+def default_config() -> dict[str, TableConfig]:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
@@ -134,7 +134,7 @@ class gene_pool(genetic_material_store):
     """Store of transient genetic codes & associated data for a population.
 
     The gene_pool is responsible for:
-        1. Populating calcuble entry fields.
+        1. Populating calculable entry fields.
         2. Providing an application interface to the fields.
         3. Persistence of updates to the gene pool.
         4. Local caching of GC's.
@@ -166,8 +166,9 @@ class gene_pool(genetic_material_store):
 
         Args
         ----
-        genomic_library (genomic_library): Source of genetic material.
-        config(pypgtable config): The config is deep copied by pypgtable.
+        populations: The populations being worked on by this worker.
+        genomic_library: Source of genetic material.
+        configs: The config is deep copied by pypgtable.
         """
         # pool is a python2 type dictionary-like object of ref:gGC
         # All gGC's in pool must be valid & any modified are sync'd to the gene pool table
@@ -182,13 +183,12 @@ class gene_pool(genetic_material_store):
         _logger.info('Established connection to Gene Pool table.')
 
         # FIXME: Validators for all tables.
-        # A dictionary of metric tables. Metric tables are undated at the end of the
-        # taregt epoch.
+        # A dictionary of metric tables.
         self._metrics: dict[str, table] = {c: table(configs[c]) for c in configs.keys() if 'metrics' in c}
         _logger.info('Established connections to metric tables.')
 
         # Modify the update strings to use the right table for the gene pool.
-        self._update_str = UPDATE_STR.replace('__table__', configs['gp']['table'])
+        self._update_str: str = UPDATE_STR.replace('__table__', configs['gp']['table'])
 
         # Used to track the number of updates to individuals in a pGC layer.
         self.layer_evolutions: list[int] = [0] * NUM_PGC_LAYERS
@@ -201,25 +201,29 @@ class gene_pool(genetic_material_store):
             # FIXME: How are other workers held back until this is executed?
             self._pool.raw.arbitrary_sql(sql_functions(), read=False)
 
+        # Fill the local cache with populations in the persistent GP.
+        self._populate_local_cache()
+
     def _populate_local_cache(self) -> None:
         """Gather the latest and greatest from the GP.
 
         1. Load all the codons.
         2. For each population select the population size with the highest survivability.
-        3. If not enough quality population pull from higher layer or create eGC's.
-        4. Pull in the pGC's that created all the selected population & sub-gGCs
-        5. Pull in the best pGC's at each layer.
+        3. Pull in the pGC's that created all the selected population & sub-gGCs
+        4. Pull in the best pGC's at each layer.
+        5. If not enough quality population pull from higher layer or create eGC's.
         """
-        self.pull(self._pool.select(_LOAD_CODONS_SQL, columns=('signature'), container='tuple'))
-        for population in filter(lambda x: 'characterize' in x, self._populations.values()):
-            literals: dict[str, Any] = {'limit': population['size'], 'population_uid': population['uid']}
-            num_loaded: int = 0
-            for ggc in self._pool.select(_LOAD_GPC_SQL, literals):
-                num_loaded += 1
+        self.pull(list(self._gl.select(_LOAD_CODONS_SQL, columns=('signature',), container='tuple')))
+        for population in self._populations.values():
+            literals: dict[str, Any] = {'limit': population['size'], 'puid': population['uid']}
+            for ggc in self._pool.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS):
                 self.pool[ggc['ref']] = ggc
-            self._new_population(population, population['size'] - num_loaded)
+
+            self._pool.raw.ptr_map_def(_PTR_MAP_PLUS_PGC)
             for ggc in self._pool.recursive_select(_REF_SQL, {'matches': list(self.pool.keys())}):
                 self.pool[ggc['ref']] = ggc
+
+            self._pool.raw.ptr_map_def(_PTR_MAP)
             literals = {'limit': population['size']}
             for layer in range(NUM_PGC_LAYERS):
                 literals['exclusions'] = self.pool.pgc_refs()
@@ -227,52 +231,7 @@ class gene_pool(genetic_material_store):
                 for pgc in self._pool.select(_LOAD_PGC_SQL, literals):
                     self.pool[pgc['ref']] = pgc
 
-    def _new_population(self, population: PopulationNorm, num: int) -> None:
-        """Fetch or create num target GC's & recursively pull in the pGC's that made them.
-
-        Construct a population with inputs and outputs as defined by inputs, outputs & vt.
-        Inputs & outputs define the GC's interface.
-
-        There are 2 sources of valid individuals: The higher layer (GL in this case) or to
-        create them.
-        FIXME: Add pull from higher layer (recursively).
-        FIXME: Implement forever work.
-
-        Args
-        ----
-        population: Population definition.
-        num: The number of GC's to create
-        vt: See vtype definition.
-        """
-        # Check the population index exists
-        _logger.info(f"Adding {num} GC's to population index: {population['uid']}.")
-
-        # If there was not enough fill the whole population create some new gGC's & mark them as individuals too.
-        # This may require pulling new agc's from the genomic library through steady state exceptions
-        # in the stabilise() in which case we need to pull in all dependents not already in the
-        # gene pool.
-        _logger.info(f'{num} GGCs to create.')
-        for _ in range(num):
-            egc: eGC = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=vtype.EP_TYPE_STR)
-            rgc, fgc_dict = stablize(self._gl, egc)
-
-            # Just in case it is trickier than expected.
-            retry_count: int = 0
-            while rgc is None:
-                _logger.info('eGC random creation failed. Retrying...')
-                retry_count += 1
-                egc = eGC(inputs=population['inputs'], outputs=population['outputs'], vt=vtype.EP_TYPE_STR)
-                rgc, fgc_dict = stablize(self._gl, egc)
-                if retry_count == 3:
-                    raise ValueError(f"Failed to create eGC with inputs = {population['inputs']} and outputs"
-                                     f" = {population['outputs']} {retry_count} times in a row.")
-
-            rgc['population_uid'] = population['uid']
-            self.pool[rgc['ref']] = rgc
-            self.pool.update(fgc_dict)
-            _logger.debug(f'Created GGCs to add to Gene Pool: {[ref_str(ggc["ref"]) for ggc in (rgc, *fgc_dict.values())]}')
-
-    def _ref_from_sig(self, sig: bytes) -> int:
+    def _ref_from_sig(self, sig: bytes | None) -> int | None:
         """Convert a signature to a reference handling clashes.
 
         Args
@@ -283,6 +242,8 @@ class gene_pool(genetic_material_store):
         -------
         64 bit reference. See reference() for bitfields.
         """
+        if sig is None:
+            return None
         ref: int = ref_from_sig(sig)
         if ref in self.pool and self.pool[ref]['signature'] != sig:
             shift: int = 0
@@ -294,7 +255,7 @@ class gene_pool(genetic_material_store):
                 assert shift < 193, "193 consecutive hashing clashes. Hmmmm!"
         return ref
 
-    def pull(self, signatures: Iterable[bytes], population_uid: int | None = None) -> None:
+    def pull(self, signatures: list[bytes], population_uid: int | None = None) -> None:
         """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
 
         LGC's are converted to gGC's.
@@ -318,7 +279,7 @@ class gene_pool(genetic_material_store):
 
             # Map signatures to references
             sig_ref_map.update({ggc[field]: self._ref_from_sig(ggc[field]) for field in GL_SIGNATURE_COLUMNS})
-            ggc.update({field + '_ref': sig_ref_map[ggc['field']] for field in GL_SIGNATURE_COLUMNS if field != 'signature'})
+            ggc.update({field + '_ref': sig_ref_map[ggc[field]] for field in GL_SIGNATURE_COLUMNS if field != 'signature'})
             ggc['ref'] = sig_ref_map[ggc['signature']]
 
             # Set the higher layer fields
@@ -329,6 +290,7 @@ class gene_pool(genetic_material_store):
             ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
 
             # Push to GP
+            # FIXME: Do this update in batch for better performance.
             updates = next(self._pool.upsert((ggc,), self._update_str, {}, GP_UPDATE_RETURNING_COLS))
             ggc.update(updates)
 
@@ -336,7 +298,10 @@ class gene_pool(genetic_material_store):
             ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
             self.pool[ggc['ref']] = ggc
             if _LOG_DEBUG:
-                assert GGC_entry_validator.validate(ggc), "GGC is not valid!"
+                if not GGC_entry_validator.validate(ggc):
+                    _logger.error(ggc)
+                    _logger.error(GGC_entry_validator.error_str())
+                    assert False, "GGC is not valid!"
 
     def push(self) -> None:
         """Insert or update locally modified gGC's into the persistent gene_pool.

@@ -11,8 +11,7 @@
     },
     "creator": {
         "nullable": true,
-        "type": "UUID",
-        "signature": true
+        "type": "UUID"
     },
     "gca": {
         "nullable": true,

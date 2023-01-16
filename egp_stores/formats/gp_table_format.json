@@ -32,7 +32,8 @@
         "reference": true
     },
     "igraph": {
-        "type": "BYTEA"
+        "type": "BYTEA",
+        "nullable": true
     },
     "lc": {
         "nullable": true,
@@ -51,13 +52,6 @@
         "default": "0",
         "type": "INTEGER",
         "volatile": true
-    },
-    "pgc_f_valid": {
-        "description": "For PGCs. True if the PGC is valid in the layer else False. TODO: This could be optimised to a SMALLINT.",
-        "nullable": true,
-        "type": "BOOLEAN[16]",
-        "volatile": true,
-        "pgc_only": true
     },
     "pgc_ref": {
         "default": "null",

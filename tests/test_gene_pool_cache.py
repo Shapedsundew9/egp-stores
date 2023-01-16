@@ -10,6 +10,7 @@ import pytest
 from egp_types.gc_type_tools import is_pgc
 from egp_types.reference import ref_str
 from egp_types.xgc_validator import GGC_entry_validator
+from egp_types.xGC import xGC
 from numpy import ndarray
 from pympler.asizeof import asizeof
 from surebrec.surebrec import _logger as _surebrec_logger
