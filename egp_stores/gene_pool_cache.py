@@ -60,9 +60,8 @@ from typing import Any, Callable, Generator, Literal, NoReturn, Self
 
 from egp_types.eGC import eGC
 from egp_types.gc_type_tools import is_pgc
-from egp_types.GGC import GGC
 from egp_types.mGC import mGC
-from egp_types.xGC import xGC, Field
+from egp_types.xGC import xGC, gGC, Field
 from egp_types.reference import ref_str
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
@@ -376,7 +375,7 @@ class _store():
         """The number of entries."""
         return len(self.ref_to_idx)
 
-    def __setitem__(self, ref: int, value: dict | eGC | mGC | GGC) -> None:
+    def __setitem__(self, ref: int, value: dict | eGC | mGC | gGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()
@@ -561,7 +560,7 @@ class gene_pool_cache():
         """The number of entries."""
         return len(self._ggc_refs) + len(self._pgc_refs)
 
-    def __setitem__(self, ref: int, value: dict | eGC | mGC | GGC) -> None:
+    def __setitem__(self, ref: int, value: dict | eGC | mGC | gGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()
