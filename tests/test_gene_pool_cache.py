@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from egp_types.gc_type_tools import is_pgc
 from egp_types.reference import ref_str
-from egp_types.xgc_validator import GGC_entry_validator
+from egp_types.xgc_validator import gGC_entry_validator
 from egp_types.xGC import xGC
 from numpy import ndarray
 from pympler.asizeof import asizeof
@@ -24,9 +24,9 @@ _logger.addHandler(NullHandler())
 
 
 # Test data conformant with GGC schema
-GGC_entry_validator.schema['inputs']['required'] = True
-GGC_entry_validator.schema['outputs']['required'] = True
-_TEST_DATA: dict[int, dict[str, Any]] = {ggc['ref']: ggc for ggc in generate(GGC_entry_validator, 100, -1022196250, True)}
+gGC_entry_validator.schema['inputs']['required'] = True
+gGC_entry_validator.schema['outputs']['required'] = True
+_TEST_DATA: dict[int, dict[str, Any]] = {ggc['ref']: ggc for ggc in generate(gGC_entry_validator, 100, -1022196250, True)}
 
 
 def element_is_match(a: Any, b: Any) -> bool:

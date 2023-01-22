@@ -60,7 +60,6 @@ from typing import Any, Callable, Generator, Literal, NoReturn, Self
 
 from egp_types.eGC import eGC
 from egp_types.gc_type_tools import is_pgc
-from egp_types.mGC import mGC
 from egp_types.xGC import xGC, gGC, Field
 from egp_types.reference import ref_str
 from egp_utils.base_validator import base_validator
@@ -369,13 +368,13 @@ class _store():
         if _LOG_DEBUG:
             _logger.debug(f"Getting GGC ref {ref_str(self._data['ref'][allocation][idx])}"
                           f" from allocation {allocation}, index {idx} (full index = {full_idx:08x}).")
-        return xGC(self._data, allocation, idx, self.fields)
+        return xGC().bind_entry(self._data, allocation, idx, self.fields)
 
     def __len__(self) -> int:
         """The number of entries."""
         return len(self.ref_to_idx)
 
-    def __setitem__(self, ref: int, value: dict | eGC | mGC | gGC) -> None:
+    def __setitem__(self, ref: int, value: dict | eGC | gGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()
@@ -453,7 +452,7 @@ class _store():
             allocation: int = full_idx >> self.delta_size
             idx: int = full_idx & self._idx_mask
             if self._data['__modified__'][allocation][idx]:
-                yield xGC(self._data, allocation, idx, fields)
+                yield xGC().bind_entry(self._data, allocation, idx, fields)
 
 
 class _indexed_store_allocation():
@@ -560,7 +559,7 @@ class gene_pool_cache():
         """The number of entries."""
         return len(self._ggc_refs) + len(self._pgc_refs)
 
-    def __setitem__(self, ref: int, value: dict | eGC | mGC | gGC) -> None:
+    def __setitem__(self, ref: int, value: dict | eGC | gGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()

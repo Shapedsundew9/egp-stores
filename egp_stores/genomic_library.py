@@ -10,7 +10,7 @@ from typing import Any, Callable, Iterable, Literal, LiteralString
 from egp_types.conversions import (compress_json, decompress_json,
                                    encode_properties, memoryview_to_bytes,
                                    str_to_datetime, str_to_sha256, str_to_UUID)
-from egp_types.xgc_validator import LGC_json_entry_validator
+from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge
 from egp_utils.text_token import register_token_code, text_token
 from pypgtable import table
@@ -148,7 +148,7 @@ class genomic_library(genetic_material_store):
                 abspath: str = join(_DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
                 with open(abspath, "r") as file_ptr:
-                    self.library.insert((LGC_json_entry_validator.normalized(entry) for entry in load(file_ptr)))
+                    self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def __getitem__(self, signature) -> Any:
         """Recursively select genetic codes starting with 'signature'.

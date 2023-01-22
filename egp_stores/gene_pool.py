@@ -12,7 +12,7 @@ from egp_types.conversions import compress_json, decompress_json, memoryview_to_
 from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str
-from egp_types.xgc_validator import GGC_entry_validator
+from egp_types.xgc_validator import gGC_entry_validator
 from numpy import histogram
 from numpy.core.fromnumeric import mean
 from pypgtable import table
@@ -298,9 +298,9 @@ class gene_pool(genetic_material_store):
             ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
             self.pool[ggc['ref']] = ggc
             if _LOG_DEBUG:
-                if not GGC_entry_validator.validate(ggc):
+                if not gGC_entry_validator.validate(ggc):
                     _logger.error(ggc)
-                    _logger.error(GGC_entry_validator.error_str())
+                    _logger.error(gGC_entry_validator.error_str())
                     assert False, "GGC is not valid!"
 
     def push(self) -> None:
@@ -316,8 +316,8 @@ class gene_pool(genetic_material_store):
             updated_gcs = []
             modified_gcs: list[xGC] = list(self.pool.modified(all_fields=True))
             for ggc in modified_gcs:
-                if not GGC_entry_validator.validate(ggc):
-                    _logger.error(f'Modified gGC invalid:\n{GGC_entry_validator.error_str()}.')
+                if not gGC_entry_validator.validate(ggc):
+                    _logger.error(f'Modified gGC invalid:\n{gGC_entry_validator.error_str()}.')
                     raise ValueError('Modified gGC is invalid. See log.')
 
         for updated_gc in self._pool.upsert(self.pool.modified(), self._update_str, {}, GPC_UPDATE_RETURNING_COLS):
@@ -335,8 +335,8 @@ class gene_pool(genetic_material_store):
 
             # Check updates are correct
             for uggc, mggc in zip(updated_gcs, modified_gcs):
-                if not GGC_entry_validator.validate(uggc):
-                    _logger.error(f'Updated gGC invalid:\n{GGC_entry_validator.error_str()}.')
+                if not gGC_entry_validator.validate(uggc):
+                    _logger.error(f'Updated gGC invalid:\n{gGC_entry_validator.error_str()}.')
                     raise ValueError('Updated gGC is invalid. See log.')
 
                 # Sanity the read-only fields
