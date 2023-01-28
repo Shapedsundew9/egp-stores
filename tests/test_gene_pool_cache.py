@@ -67,7 +67,7 @@ def dict_is_match(dct, gpc: gene_pool_cache, removed: list[int] = []) -> None:
     assert set((v['pgc_ref'] for v in dct.values())) == set((v['pgc_ref'] for _, v in gpc.items())), (
         "Dictionary & GPC sets of values from items do not match!")
     for dct_ggc in dct.values():
-        gpc_ggc = gpc[dct_ggc['ref']]
+        gpc_ggc: xGC = gpc[dct_ggc['ref']]
         _logger.debug(f"Checking GGC ref {ref_str(gpc_ggc['ref'])} dct_ggc ref {ref_str(dct_ggc['ref'])}")
         assert dct_ggc['ref'] == gpc_ggc['ref'], f"Dictionary {ref_str(dct_ggc['ref'])} not in order in GPC!"
         for k, v in dct_ggc.items():

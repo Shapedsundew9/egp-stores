@@ -514,6 +514,7 @@ class gene_pool_cache():
         fields: dict[str, ConfigDefinition] = {k: v for k, v in filter(_PGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())}
         self._pgc_cache: _store = _store(create_cache_config(fields), delta_size)
         self._pgc_refs: dict[int, int] = self._pgc_cache.ref_to_idx
+        xGC._gpc = self
 
     def __contains__(self, ref: int) -> bool:
         """Test if a ref is in the GPC.
