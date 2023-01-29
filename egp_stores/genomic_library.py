@@ -80,7 +80,7 @@ GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(
 # The default config
 _DEFAULT_CONFIG: dict[str, Any] = {
     'database': {
-        'dbname': 'erasmus'
+        'dbname': 'erasmus_db'
     },
     'table': 'genomic_library',
     'ptr_map': _PTR_MAP,
@@ -248,7 +248,7 @@ class genomic_library(genetic_material_store):
         """
         _logger.debug("Normalizing {} entries.".format(len(entries)))
         for signature, entry in entries.items():
-            entries[signature] = LGC_json_entry_validator.normalized(entry)
+            entries[signature] = LGC_json_load_entry_validator.normalized(entry)
             entries[signature]['_calculated'] = False
         for entry in entries.values():
             self._calculate_fields(entry, entries)
@@ -257,9 +257,9 @@ class genomic_library(genetic_material_store):
         check_list: set[bytes] = set(entries.keys())
         for entry in entries.values():
             del entry['_calculated']
-            if not LGC_json_entry_validator.validate(entry):
+            if not LGC_json_load_entry_validator.validate(entry):
                 _logger.error(
-                    str(text_token({'E03001': {'errors': LGC_json_entry_validator.error_str(),
+                    str(text_token({'E03001': {'errors': LGC_json_load_entry_validator.error_str(),
                         'entry': pformat(entry, width=180)}})))
                 raise ValueError('Genomic library entry invalid.')
             references: list[bytes] = [entry['gca'], entry['gcb']]

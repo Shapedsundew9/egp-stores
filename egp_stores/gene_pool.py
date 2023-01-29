@@ -84,7 +84,7 @@ _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0
 # The gene pool default config
 _DEFAULT_GP_CONFIG: TableConfig = {
     'database': {
-        'dbname': 'erasmus'
+        'dbname': 'erasmus_db'
     },
     'table': 'gene_pool',
     'ptr_map': _PTR_MAP,
@@ -95,7 +95,7 @@ _DEFAULT_GP_CONFIG: TableConfig = {
 }
 _DEFAULT_GP_METRICS_CONFIG: TableConfig = {
     'database': {
-        'dbname': 'erasmus'
+        'dbname': 'erasmus_db'
     },
     'table': 'gp_metrics',
     'schema': _GP_METRICS_TABLE_SCHEMA,
@@ -104,7 +104,7 @@ _DEFAULT_GP_METRICS_CONFIG: TableConfig = {
 }
 _DEFAULT_PGC_METRICS_CONFIG: TableConfig = {
     'database': {
-        'dbname': 'erasmus'
+        'dbname': 'erasmus_db'
     },
     'table': 'pgc_metrics',
     'schema': _GP_PGC_METRICS_TABLE_SCHEMA,
