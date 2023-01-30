@@ -1,0 +1,7 @@
+{
+    "gene_pool": {
+        "type": "dict",
+        "default": "{}",
+        
+    }
+}

@@ -14,7 +14,8 @@ from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge
 from egp_utils.text_token import register_token_code, text_token
 from pypgtable import table
-from pypgtable.typing import RowIter
+from pypgtable.validators import raw_table_config_validator
+from pypgtable.typing import RowIter, TableConfig, TableConfigNorm
 
 from .genetic_material_store import (GMS_RAW_TABLE_SCHEMA, UPDATE_STR,
                                      genetic_material_store)
@@ -78,7 +79,7 @@ GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(
     lambda x: x[1].get('signature', False), GL_RAW_TABLE_SCHEMA.items())))
 
 # The default config
-_DEFAULT_CONFIG: dict[str, Any] = {
+_DEFAULT_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
         'dbname': 'erasmus_db'
     },
@@ -88,10 +89,10 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     'create_table': True,
     'create_db': True,
     'conversions': _CONVERSIONS
-}
+})
 
 
-def default_config() -> dict[str, Any]:
+def default_config() -> TableConfigNorm:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
@@ -125,7 +126,7 @@ class genomic_library(genetic_material_store):
     that is not in the genomic library.
     """
 
-    def __init__(self, config: dict[str, Any] = _DEFAULT_CONFIG) -> None:
+    def __init__(self, config: TableConfig | TableConfigNorm = _DEFAULT_CONFIG) -> None:
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple

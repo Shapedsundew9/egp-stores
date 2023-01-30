@@ -1,0 +1,6 @@
+{
+    "next_owner": {
+        "type": "INTEGER",
+        "default": "-1"
+    }
+}

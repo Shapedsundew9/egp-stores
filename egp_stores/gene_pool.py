@@ -5,7 +5,8 @@ from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from typing import Any, Literal
-from uuid import UUID
+from functools import partial 
+from itertools import count
 
 from egp_population.typing import PopulationsNorm
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
@@ -13,11 +14,14 @@ from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str
 from egp_types.xgc_validator import gGC_entry_validator
+from egp_types.reference import reference
 from numpy import histogram
 from numpy.core.fromnumeric import mean
 from pypgtable import table
-from pypgtable.typing import Conversions, PtrMap, TableConfig, TableSchema
+from pypgtable.typing import Conversions, PtrMap, TableConfig, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
+from .typing import GenePoolConfig, GenePoolConfigNorm
+from egp_utils.common import merge
 
 from .gene_pool_cache import GPC_HIGHER_LAYER_COLS, GPC_UPDATE_RETURNING_COLS, gene_pool_cache, xGC
 from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA, GP_UPDATE_RETURNING_COLS
@@ -64,10 +68,14 @@ _PTR_MAP_PLUS_PGC: PtrMap = {
     _PEL: _NL
 }
 
+_OWNER_ID_UPDATE_SQL: str = "{owner_id} = (({owner_id}::BIGINT + 1::BIGINT) & x'7FFFFFFF::BIGINT)::INTEGER')"
+
 with open(join(dirname(__file__), "formats/gp_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
 with open(join(dirname(__file__), "formats/gp_pgc_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_PGC_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
+with open(join(dirname(__file__), "formats/gp_meta_table_format.json"), "r", encoding="utf8") as file_ptr:
+    _GP_META_TABLE_SCHEMA: TableSchema = load(file_ptr)
 
 
 # GC queries
@@ -82,7 +90,7 @@ _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0
 
 
 # The gene pool default config
-_DEFAULT_GP_CONFIG: TableConfig = {
+_DEFAULT_GP_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
         'dbname': 'erasmus_db'
     },
@@ -92,8 +100,8 @@ _DEFAULT_GP_CONFIG: TableConfig = {
     'create_table': True,
     'create_db': True,
     'conversions': _GP_CONVERSIONS
-}
-_DEFAULT_GP_METRICS_CONFIG: TableConfig = {
+})
+_DEFAULT_GP_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
         'dbname': 'erasmus_db'
     },
@@ -101,8 +109,8 @@ _DEFAULT_GP_METRICS_CONFIG: TableConfig = {
     'schema': _GP_METRICS_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
-}
-_DEFAULT_PGC_METRICS_CONFIG: TableConfig = {
+})
+_DEFAULT_PGC_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
         'dbname': 'erasmus_db'
     },
@@ -110,15 +118,25 @@ _DEFAULT_PGC_METRICS_CONFIG: TableConfig = {
     'schema': _GP_PGC_METRICS_TABLE_SCHEMA,
     'create_table': True,
     'create_db': True,
-}
-_DEFAULT_CONFIGS: dict[str, TableConfig] = {
-    "gp": _DEFAULT_GP_CONFIG,
-    "gp_metrics": _DEFAULT_GP_METRICS_CONFIG,
-    "pgc_metrics": _DEFAULT_PGC_METRICS_CONFIG,
+})
+_DEFAULT_GP_META_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
+    'database': {
+        'dbname': 'erasmus_db'
+    },
+    'table': 'owners',
+    'schema': _GP_META_TABLE_SCHEMA,
+    'create_table': True,
+    'create_db': True,
+})
+_DEFAULT_CONFIGS: GenePoolConfigNorm = {
+    'gene_pool': _DEFAULT_GP_CONFIG,
+    'meta_data': _DEFAULT_GP_META_CONFIG,
+    'gp_metrics': _DEFAULT_GP_METRICS_CONFIG,
+    'pgc_metrics': _DEFAULT_PGC_METRICS_CONFIG,
 }
 
 
-def default_config() -> dict[str, TableConfig]:
+def default_config() -> GenePoolConfigNorm:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
@@ -127,7 +145,7 @@ def default_config() -> dict[str, TableConfig]:
     -------
     The default genomic_library() configuration.
     """
-    return {k: raw_table_config_validator.normalized(v) for k, v in deepcopy(_DEFAULT_CONFIGS).items()}
+    return deepcopy(_DEFAULT_CONFIGS)
 
 
 class gene_pool(genetic_material_store):
@@ -156,8 +174,8 @@ class gene_pool(genetic_material_store):
     """
     # TODO: Default genomic_library should be local host
 
-    def __init__(self, populations: PopulationsNorm, worker_id: UUID, glib: genomic_library | None = None,
-                 configs: dict[str, TableConfig] | None = None) -> None:
+    def __init__(self, populations: PopulationsNorm, glib: genomic_library | None = None,
+                 config: GenePoolConfig | GenePoolConfigNorm = {}) -> None:
         """Connect to or create a gene pool.
 
         The gene pool data persists in a postgresql database. Multiple
@@ -173,36 +191,43 @@ class gene_pool(genetic_material_store):
         # pool is a python2 type dictionary-like object of ref:gGC
         # All gGC's in pool must be valid & any modified are sync'd to the gene pool table
         # in the database at the end of the target epoch.
-        if configs is None:
-            configs = _DEFAULT_CONFIGS
+        def normalize(k, v) -> dict[Any, Any]:
+            return merge(v, raw_table_config_validator.normalized(config.get(k, {})), no_new_keys=True)
+        self.config: GenePoolConfigNorm = {k: normalize(k, v) for k, v in _DEFAULT_CONFIGS.items()}  # type: ignore
+
         self._gl: genomic_library = genomic_library() if glib is None else glib
 
         self.pool: gene_pool_cache = gene_pool_cache()
         _logger.info('Gene Pool Cache created.')
-        self._pool: table = table(configs['gp'])
+        self._pool: table = table(self.config['gene_pool'])
         _logger.info('Established connection to Gene Pool table.')
 
-        # FIXME: Validators for all tables.
-        # A dictionary of metric tables.
-        self._metrics: dict[str, table] = {c: table(configs[c]) for c in configs.keys() if 'metrics' in c}
-        _logger.info('Established connections to metric tables.')
+        self._tables: dict[str, table] = {k: table(v) for k, v in self.config.items()}
+        _logger.info('Established connections to gene pool tables.')
 
         # Modify the update strings to use the right table for the gene pool.
-        self._update_str: str = UPDATE_STR.replace('__table__', configs['gp']['table'])
-
-        # Used to track the number of updates to individuals in a pGC layer.
-        self.layer_evolutions: list[int] = [0] * NUM_PGC_LAYERS
-        self._populations: PopulationsNorm = populations
+        self._update_str: str = UPDATE_STR.replace('__table__', self.config['gene_pool']['table'])
 
         # If this instance created the gene pool then it is responsible for configuring
         # setting up database functions and initial population.
         if self._pool.raw.creator:
-            _logger.info(f'This worker ({worker_id}) is the Gene Pool table creator.')
             # FIXME: How are other workers held back until this is executed?
             self._pool.raw.arbitrary_sql(sql_functions(), read=False)
 
+        self.owner_id: int | None = None
+        self.next_reference: partial[int] | None = None
+
         # Fill the local cache with populations in the persistent GP.
         self._populate_local_cache()
+
+    def sub_process_init(self) -> None:
+        """Define subprocess specific values."""
+        self.owner_id = next(self._tables['meta_data'].update(_OWNER_ID_UPDATE_SQL, returning=('last_owner_id',), container='tuple'))[0]
+        self.next_reference = partial(reference, owner_id=self.owner_id, counter=count())
+
+    def creator(self) -> bool:
+        """True if this process created the gene pool table in the database."""
+        return self._pool.raw.creator
 
     def _populate_local_cache(self) -> None:
         """Gather the latest and greatest from the GP.
