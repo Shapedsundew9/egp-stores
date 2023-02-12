@@ -295,12 +295,12 @@ class _store():
         self.read_only_fields: dict[str, Field] = {k: v for k, v in self.fields.items() if v['read_only']}
         self.delta_size: int = delta_size
         self.ref_to_idx: dict[int, int] = {}
-        self._data: dict[str, list[Any]] = {k: [] for k in self.fields.keys()}
+        self.data: dict[str, list[Any]] = {k: [] for k in self.fields.keys()}
         self._devnull: devnull = devnull()
         self._idx_mask: int = (1 << self.delta_size) - 1
-        _logger.debug(f"Fields created: {tuple(self._data.keys())}")
+        _logger.debug(f"Fields created: {tuple(self.data.keys())}")
         self._empty_list: list[int] = []
-        _allocate: partial[None] = partial(allocate, data=self._data, delta_size=delta_size, fields=self.fields)
+        _allocate: partial[None] = partial(allocate, data=self.data, delta_size=delta_size, fields=self.fields)
         self._idx: Generator[int, None, None] = next_idx_generator(delta_size, self._empty_list, _allocate)
         next(self._idx)  # Allocation 0, index 0 = None
 
@@ -346,7 +346,7 @@ class _store():
         if _LOG_DEBUG:
             _logger.debug(f"Deleting ref {ref_str(ref)}: Allocation {allocation} index {idx}.")
         for k, v in self.fields.items():
-            self._data[k][allocation][idx] = v['default']
+            self.data[k][allocation][idx] = v['default']
 
     def __getitem__(self, ref: int) -> xGC:
         """Return an gGC dict-like structure from the GPC.
@@ -366,9 +366,9 @@ class _store():
         allocation: int = full_idx >> self.delta_size
         idx: int = full_idx & self._idx_mask
         if _LOG_DEBUG:
-            _logger.debug(f"Getting GGC ref {ref_str(self._data['ref'][allocation][idx])}"
+            _logger.debug(f"Getting GGC ref {ref_str(self.data['ref'][allocation][idx])}"
                           f" from allocation {allocation}, index {idx} (full index = {full_idx:08x}).")
-        return xGC().bind_entry(self._data, allocation, idx, self.fields)
+        return xGC().bind_entry(self.data, allocation, idx, self.fields)
 
     def __len__(self) -> int:
         """The number of entries."""
@@ -400,14 +400,14 @@ class _store():
         if _LOG_DEBUG:
             _logger.debug(f"Setting GGC ref {ref_str(ref)} to allocation {allocation},"
                           f" index {idx} (full index = {full_idx:08x}).")
-        self._data['__modified__'][allocation][idx] = modified
+        self.data['__modified__'][allocation][idx] = modified
         for k, v in value.items():
             # None means not set i.e. allocation default.
             if v is not None:
-                self._data.get(k, self._devnull)[allocation][idx] = v
+                self.data.get(k, self._devnull)[allocation][idx] = v
                 if _LOG_DEBUG and k in self.fields:
                     self.fields[k]['write_count'] += 1
-                    _logger.debug(f"Setting GGC key '{k}' to {self._data.get(k, self._devnull)[allocation][idx]}).")
+                    _logger.debug(f"Setting GGC key '{k}' to {self.data.get(k, self._devnull)[allocation][idx]}).")
 
     def __copy__(self) -> NoReturn:
         """Make sure we do not copy the GPC."""
@@ -451,8 +451,8 @@ class _store():
         for full_idx in self.ref_to_idx.values():
             allocation: int = full_idx >> self.delta_size
             idx: int = full_idx & self._idx_mask
-            if self._data['__modified__'][allocation][idx]:
-                yield xGC().bind_entry(self._data, allocation, idx, fields)
+            if self.data['__modified__'][allocation][idx]:
+                yield xGC().bind_entry(self.data, allocation, idx, fields)
 
 
 class _indexed_store_allocation():
@@ -632,3 +632,4 @@ class gene_pool_cache():
             yield ggc
         for pgc in self._pgc_cache.modified(all_fields):
             yield pgc
+
