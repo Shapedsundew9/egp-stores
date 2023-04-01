@@ -9,7 +9,7 @@ from typing import Any, Callable, Iterable, Literal, LiteralString
 
 from egp_types.conversions import (compress_json, decompress_json,
                                    encode_properties, memoryview_to_bytes,
-                                   str_to_datetime, str_to_sha256, str_to_UUID)
+                                   str_to_datetime, str_to_sha256, str_to_uuid)
 from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge
 from egp_utils.text_token import register_token_code, text_token
@@ -63,7 +63,7 @@ _CONVERSIONS: tuple[tuple[LiteralString, Callable[..., Any] | None, Callable[...
     ('pgc', str_to_sha256, memoryview_to_bytes),
     ('inputs', None, memoryview_to_bytes),
     ('outputs', None, memoryview_to_bytes),
-    ('creator', str_to_UUID, None),
+    ('creator', str_to_uuid, None),
     ('created', str_to_datetime, None),
     ('updated', str_to_datetime, None),
     ('properties', encode_properties, None)
