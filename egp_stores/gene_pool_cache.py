@@ -47,26 +47,21 @@ For read-only GC's in the persistent Gene Pool loaded on startup ~75% of the dat
 is read only avoiding 4x as many CoW's giving a total factor of ~16x for that data.
 Bit of an anti-pattern for python but in this case the savings are worth it.
 """
-from __future__ import annotations
 
-from collections.abc import KeysView as dict_keys
 from copy import deepcopy
-from functools import partial
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from re import Match, search
-from typing import Any, Callable, Generator, Literal, NoReturn, Self
+from typing import Any, Callable, Generator, Literal, NoReturn
 
 from egp_types.eGC import eGC
 from egp_types.gc_type_tools import is_pgc
-from egp_types.xGC import xGC, gGC, Field
-from egp_types.reference import ref_str
+from egp_types.xGC import xGC
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
-from egp_utils.packed_store import packed_store
-from numpy import bool_, float32, float64, full, int16, int32, int64, uint32
-from numpy.typing import NDArray
+from egp_utils.packed_store import packed_store, indexed_store, Field
+from numpy import bool_, float32, float64, int16, int32, int64
 from pypgtable.typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
@@ -165,7 +160,7 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
             typ = match.group(1)
         length: int = 1 if not match.group(2) else int(match.group(2))
         fields[column] = {
-            'type': sql_np_mapping.get(typ, list) if not definition.get('indexed', False) else _indexed_store,
+            'type': sql_np_mapping.get(typ, list) if not definition.get('indexed', False) else indexed_store,
             'length': length,
             'default': sql_np_mapping[typ](0) if typ in sql_np_mapping else None,
             'read_only': not definition.get('volatile', False),
@@ -230,7 +225,7 @@ class gene_pool_cache():
         """The number of entries."""
         return len(self._ggc_refs) + len(self._pgc_refs)
 
-    def __setitem__(self, ref: int, value: dict | eGC | gGC) -> None:
+    def __setitem__(self, ref: int, value: eGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()
