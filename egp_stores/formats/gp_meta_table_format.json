@@ -1,6 +1,10 @@
 {
-    "next_owner": {
-        "type": "INTEGER",
-        "default": "-1"
+    "next_GPSPUID": {
+        "type": "BIGINT",
+        "default": "0"
+    },
+    "UUID": {
+        "type": "UUID",
+        "default": "uuid_generate_v1()"
     }
 }

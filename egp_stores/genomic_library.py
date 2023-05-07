@@ -71,8 +71,8 @@ _CONVERSIONS: tuple[tuple[LiteralString, Callable[..., Any] | None, Callable[...
 
 
 GL_RAW_TABLE_SCHEMA: dict[str, Any] = deepcopy(GMS_RAW_TABLE_SCHEMA)
-with open(join(dirname(__file__), "formats/gl_table_format.json"), "r") as file_ptr:
-    merge(GL_RAW_TABLE_SCHEMA, load(file_ptr))
+with open(join(dirname(__file__), "formats/gl_table_format.json"), "r", encoding="utf-8") as _file_ptr:
+    merge(GL_RAW_TABLE_SCHEMA, load(_file_ptr))
 GL_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == '_', GL_RAW_TABLE_SCHEMA)))
 GL_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
 GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(
@@ -104,13 +104,13 @@ def default_config() -> TableConfigNorm:
     return deepcopy(_DEFAULT_CONFIG)
 
 
-def sql_functions() -> str:
+def gl_sql_functions() -> str:
     """Load the SQL functions used by the genomic library & dependent repositiories of genetic material.
 
     SQL functions are used to update genetic code entries as they are an easy way to guarantee
     atomic behaviour.
     """
-    with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r') as fileptr:
+    with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r', encoding='utf-8') as fileptr:
         return fileptr.read()
 
 
@@ -144,11 +144,11 @@ class genomic_library(genetic_material_store):
         self.select: Callable[..., RowIter] = self.library.select
         self.recursive_select: Callable[..., RowIter] = self.library.recursive_select
         if self.library.raw.creator:
-            self.library.raw.arbitrary_sql(sql_functions(), read=False)
+            self.library.raw.arbitrary_sql(gl_sql_functions(), read=False)
             for data_file in _DATA_FILES:
                 abspath: str = join(_DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
-                with open(abspath, "r") as file_ptr:
+                with open(abspath, "r", encoding='utf-8') as file_ptr:
                     self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def __getitem__(self, signature) -> Any:
@@ -210,8 +210,8 @@ class genomic_library(genetic_material_store):
         if not entry['gca'] is None:
             if entry['gca'] not in entries.keys():
                 if not self.library[entry['gca']]:
-                    _logger.error('entry["gca"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gca']))
-                    _logger.error('Entries signature list: {}'.format(entries.keys()))
+                    _logger.error(f'entry["gca"] = {entry["gca"]} does not exist in the list to be stored or genomic library!')
+                    _logger.error(f'Entries signature list: {entries.keys()}')
             else:
                 gca = entries[entry['gca']]
                 if not gca['_calculated']:
@@ -221,8 +221,8 @@ class genomic_library(genetic_material_store):
         if not entry['gcb'] is None:
             if entry['gcb'] not in entries.keys():
                 if not self.library[entry['gcb']]:
-                    _logger.error('entry["gcb"] = {} does not exist in the list to be stored or genomic library!'.format(entry['gcb']))
-                    _logger.error('Entries signature list: {}'.format(entries.keys()))
+                    _logger.error(f'entry["gcb"] = {entry["gcb"]} does not exist in the list to be stored or genomic library!')
+                    _logger.error(f'Entries signature list: {entries.keys()}')
             else:
                 gcb = entries[entry['gca']]
                 if not gcb['_calculated']:
@@ -247,7 +247,7 @@ class genomic_library(genetic_material_store):
         entries: A dictionary entry['signature']: entry of genetic code dictionaries to be
             stored or updated in the genomic library.
         """
-        _logger.debug("Normalizing {} entries.".format(len(entries)))
+        _logger.debug(f"Normalizing {len(entries)} entries.")
         for signature, entry in entries.items():
             entries[signature] = LGC_json_load_entry_validator.normalized(entry)
             entries[signature]['_calculated'] = False

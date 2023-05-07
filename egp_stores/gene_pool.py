@@ -6,7 +6,7 @@ from itertools import count
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import Any, Literal
+from typing import Any, Literal, Callable
 
 from egp_types.conversions import (compress_json, decompress_json,
                                    memoryview_to_bytes)
@@ -27,8 +27,8 @@ from .gene_pool_common import (GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA,
 from .genetic_material_store import genetic_material_store
 from .genomic_library import (GL_HIGHER_LAYER_COLS, GL_RAW_TABLE_SCHEMA,
                               GL_SIGNATURE_COLUMNS, UPDATE_STR,
-                              genomic_library, sql_functions)
-from .typing import GenePoolConfig, GenePoolConfigNorm
+                              genomic_library, gl_sql_functions)
+from .egp_typing import GenePoolConfig, GenePoolConfigNorm
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
@@ -38,12 +38,12 @@ _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 
 def compress_igraph(obj: gc_graph) -> bytes | memoryview | bytearray | None:
     """Extract the internal representation and compress."""
-    return compress_json(obj.save())
+    return compress_json(str(obj.i_graph))
 
 
 def decompress_igraph(obj: bytes) -> gc_graph:
     """Create a gc_graph() from an decompressed internal representation."""
-    return gc_graph(internal=decompress_json(obj))
+    return gc_graph(i_graph=decompress_json(obj))  # type: ignore
 
 
 _GP_CONVERSIONS: Conversions = (
@@ -70,7 +70,10 @@ _PTR_MAP_PLUS_PGC: PtrMap = {
     _PEL: _NL
 }
 
-_OWNER_ID_UPDATE_SQL: str = "{owner_id} = (({owner_id}::BIGINT + 1::BIGINT) & x'7FFFFFFF::BIGINT)::INTEGER')"
+# If GPSPUID + 1 overflows 32 signed bits set it to max positive (leave it unchanged)
+# A GPSPUID of 2**31 - 1 is a signal to the subprocess to tell the worker we are out of
+# Gene Pool Sub-Process UID's.
+_GPSPUID_UPDATE_SQL: str = "{gpspuid} = COALESE(NULLIF({gpspuid} + 1:BIGINT, x'80000000::BIGINT), x'7FFFFFFF::BIGINT')"
 
 with open(join(dirname(__file__), "formats/gp_metrics_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
@@ -109,8 +112,8 @@ _DEFAULT_GP_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normali
     },
     'table': 'gp_metrics',
     'schema': _GP_METRICS_TABLE_SCHEMA,
-    'create_table': True,
-    'create_db': True,
+    'create_table': False,
+    'create_db': False,
 })
 _DEFAULT_PGC_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
@@ -118,17 +121,17 @@ _DEFAULT_PGC_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normal
     },
     'table': 'pgc_metrics',
     'schema': _GP_PGC_METRICS_TABLE_SCHEMA,
-    'create_table': True,
-    'create_db': True,
+    'create_table': False,
+    'create_db': False,
 })
 _DEFAULT_GP_META_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
     'database': {
         'dbname': 'erasmus_db'
     },
-    'table': 'owners',
+    'table': 'meta_data',
     'schema': _GP_META_TABLE_SCHEMA,
-    'create_table': True,
-    'create_db': True,
+    'create_table': False,
+    'create_db': False,
 })
 _DEFAULT_CONFIGS: GenePoolConfigNorm = {
     'gene_pool': _DEFAULT_GP_CONFIG,
@@ -148,6 +151,12 @@ def default_config() -> GenePoolConfigNorm:
     The default genomic_library() configuration.
     """
     return deepcopy(_DEFAULT_CONFIGS)
+
+
+def gp_sql_functions() -> str:
+    """Load the SQL functions used by the gene pool & dependent repositiories of genetic material."""
+    with open(join(dirname(__file__), 'data/gp_functions.sql'), 'r', encoding='utf-8') as fileptr:
+        return fileptr.read()
 
 
 class gene_pool(genetic_material_store):
@@ -175,6 +184,7 @@ class gene_pool(genetic_material_store):
     when filling / flushing the GPC.
     """
     # TODO: Default genomic_library should be local host
+
     def __init__(self, populations: dict[int, PopulationConfigNorm], glib: genomic_library,
                  config: GenePoolConfig | GenePoolConfigNorm) -> None:
         """Connect to or create a gene pool.
@@ -203,7 +213,18 @@ class gene_pool(genetic_material_store):
         _logger.info('Gene Pool Cache created.')
         self._pool: table = table(self.config['gene_pool'])
         _logger.info('Established connection to Gene Pool table.')
+        if self._pool.raw.creator:
+            # The Gene Pool uses the same GC update functions as the Genomic Library
+            self._pool.raw.arbitrary_sql(gl_sql_functions(), read=False)
+            self._pool.raw.arbitrary_sql(gp_sql_functions(), read=False)
 
+            # Enable creation of the other GP tables
+            for table_config in self.config.values():
+                if 'create_table' in table_config:
+                    table_config['create_table'] = True
+
+        # If this process did not create the gene pool table the following line will wait
+        # for the other tables to be created.
         self._tables: dict[str, table] = {k: table(v) for k, v in self.config.items()}
         _logger.info('Established connections to gene pool tables.')
 
@@ -214,18 +235,23 @@ class gene_pool(genetic_material_store):
         # setting up database functions and initial population.
         if self._pool.raw.creator:
             # FIXME: How are other workers held back until this is executed?
-            self._pool.raw.arbitrary_sql(sql_functions(), read=False)
+            self._pool.raw.arbitrary_sql(gl_sql_functions(), read=False)
 
-        self.owner_id: int | None = None
-        self.next_reference: partial[int] | None = None
+        self.gpspuid: int = -1
+        self.next_reference: Callable[[], int] = lambda: 0
 
         # Fill the local cache with populations in the persistent GP.
         self._populate_local_cache()
 
     def sub_process_init(self) -> None:
-        """Define subprocess specific values."""
-        self.owner_id = next(self._tables['meta_data'].update(_OWNER_ID_UPDATE_SQL, returning=('last_owner_id',), container='tuple'))[0]
-        self.next_reference = partial(reference, owner_id=self.owner_id, counter=count())
+        """Define subprocess specific values *WHEN IN THE SUB-PROCESS*."""
+        self.gpspuid = next(self._tables['meta_data'].update(_GPSPUID_UPDATE_SQL, returning=('next_GPSPUID',), container='tuple'))[0]
+        assert self.gpspuid < 0x7FFFFFFF, 'GPSPUID out of range!'
+        self.next_reference = partial(reference, gpspuid=self.gpspuid, counter=count())
+
+        # We could set the creator field for every table in self._tables to False but that would cause unnecessary page copies
+        # and we do not use it. Noted just in case that changes.
+        self._pool.raw.creator = False
 
     def creator(self) -> bool:
         """True if this process created the gene pool table in the database."""
@@ -297,6 +323,18 @@ class gene_pool(genetic_material_store):
         signatures: Signatures to pull from the genomic library.
         population_uid: Population UID to label ALL top level GC's with
         """
+        # FIXME: This does not work in the case of a signature reference collision occuring at the same time
+        # in two different sub-processes. In that scenario one GL GC will be pulled into the GP and the second will 'fail'
+        # the UPSERT. Fail as in corrupt the record by trying to update one GC with another. Obviously this needs
+        # to be prevented. Since the reference can only realistically be defined by the sub-process we need
+        # to identify and explicitly fail the entire UPSERT, catch in the sub-process, create a new shifted reference
+        # (which means remembering the old shift), map that to everywhere needed & try the entire UPSERT again.
+        # Thoughts:
+        #   0. Capture the shift value for all created references
+        #   1. INSERT and on conflict return the references and abort all the inserts
+        #   2. Check if conflicts are the same GC's (that got added after we checked for them): Remove from INSERT as needed.
+        #   2. Create new references (and capture shifts) for all genuine conflicts and remap
+        #   3. Go to #1
         if _LOG_DEBUG:
             _logger.debug(f'Recursively pulling {signatures} into Gene Pool for population {population_uid}.')
         sig_ref_map: dict[bytes, int] = {}
