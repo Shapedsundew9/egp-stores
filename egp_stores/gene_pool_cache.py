@@ -55,7 +55,7 @@ from os.path import dirname, join
 from re import Match, search
 from typing import Any, Callable, Generator, Literal, NoReturn
 
-from egp_types.eGC import eGC
+from egp_types.aGC import aGC
 from egp_types.gc_type_tools import is_pgc
 from egp_types.xGC import xGC
 from egp_utils.base_validator import base_validator
@@ -225,7 +225,7 @@ class gene_pool_cache():
         """The number of entries."""
         return len(self._ggc_refs) + len(self._pgc_refs)
 
-    def __setitem__(self, ref: int, value: eGC) -> None:
+    def __setitem__(self, ref: int, value: aGC) -> None:
         """Create a gGC entry in the GPC.
 
         NOTE: Set of an existing entry behaves like an update()
