@@ -238,7 +238,7 @@ class gene_pool_cache():
         if is_pgc(value):
             self._pgc_cache[ref] = value
         else:
-            self._ggc_cache[ref] = value
+            self._ggc_cache[ref] = value  # type: ignore aGC is always dict compatible.
 
     def __copy__(self) -> NoReturn:
         """Make sure we do not copy the GPC."""

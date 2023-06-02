@@ -14,3 +14,18 @@ class GenePoolConfigNorm(TypedDict):
     meta_data: TableConfigNorm
     gp_metrics: TableConfigNorm
     pgc_metrics: TableConfigNorm
+
+
+class AncestryKeys(TypedDict):
+    edges: tuple[str, ...]
+    missing: tuple[str, ...]
+    lost: tuple[str, ...]
+
+
+class StructureKeys(TypedDict):
+    edges: tuple[str, ...]
+
+
+class GmsGraphViews(TypedDict):
+    structure: StructureKeys
+    ancestory: AncestryKeys
