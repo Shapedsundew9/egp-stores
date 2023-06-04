@@ -17,15 +17,15 @@ class GenePoolConfigNorm(TypedDict):
 
 
 class AncestryKeys(TypedDict):
-    edges: tuple[str, ...]
-    missing: tuple[str, ...]
-    lost: tuple[str, ...]
+    edge_keys: tuple[str, ...]
+    missing_keys: tuple[str, ...]
+    lost_keys: tuple[str, ...]
 
 
 class StructureKeys(TypedDict):
-    edges: tuple[str, ...]
+    edge_keys: tuple[str, ...]
 
 
 class GmsGraphViews(TypedDict):
     structure: StructureKeys
-    ancestory: AncestryKeys
+    ancestry: AncestryKeys

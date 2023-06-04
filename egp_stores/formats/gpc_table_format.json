@@ -6,5 +6,12 @@
         "nullable": true,
         "default": "null",
         "signature": true
+    },
+    "vertex_idx": {
+        "description": "Vertex index in the GPC Graph.",
+        "type": "INTEGER",
+        "indexed": false,
+        "nullable": false,
+        "default": "-1"
     }
 }

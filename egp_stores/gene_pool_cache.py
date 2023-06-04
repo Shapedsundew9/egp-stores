@@ -66,6 +66,8 @@ from pypgtable.typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
 from .gene_pool_common import GP_RAW_TABLE_SCHEMA
+from .gene_pool_cache_graph import gene_pool_cache_graph
+
 
 # Logging
 _logger: Logger = getLogger(__name__)
@@ -159,10 +161,11 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
         if match is not None and '[]' not in definition['type']:
             typ = match.group(1)
         length: int = 1 if not match.group(2) else int(match.group(2))
+        default: str | int = 0 if definition.get('default', 'null') == 'null' else definition.get('default', 0)
         fields[column] = {
             'type': sql_np_mapping.get(typ, list) if not definition.get('indexed', False) else indexed_store,
             'length': length,
-            'default': sql_np_mapping[typ](0) if typ in sql_np_mapping else None,
+            'default': sql_np_mapping[typ](default) if typ in sql_np_mapping else None,
             'read_only': not definition.get('volatile', False),
             'read_count': 0,
             'write_count': 0
@@ -170,10 +173,12 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
     return fields
 
 
-class gene_pool_cache():
+class gene_pool_cache(gene_pool_cache_graph):
     """The Gene Pool Cache (GPC)."""
+    # TODO: Implement bulk get, set & del methods
 
     def __init__(self, delta_size: int = 17) -> None:
+        super().__init__()
         fields: dict[str, ConfigDefinition] = {k: v for k, v in filter(_GGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())}
         self._ggc_cache: packed_store = packed_store(create_cache_config(fields), xGC, delta_size)
         self._ggc_refs: dict[int, int] = self._ggc_cache.ref_to_idx
@@ -197,14 +202,18 @@ class gene_pool_cache():
     def __delitem__(self, ref: int) -> None:
         """Remove the entry for ref from the GPC.
 
+        If any sub-GC's are orphaned they will also be removed.
+
         Args
         ----
         ref: GPC unique GC reference.
         """
-        if ref in self._ggc_refs:
-            del self._ggc_cache[ref]
-        else:
-            del self._pgc_cache[ref]
+        refs: list[int] = self.remove([ref])
+        for _ref in refs:
+            if _ref in self._ggc_refs:
+                del self._ggc_cache[_ref]
+            else:
+                del self._pgc_cache[_ref]
 
     def __getitem__(self, ref: int) -> xGC:
         """Return an gGC dict-like structure from the GPC.
@@ -239,6 +248,7 @@ class gene_pool_cache():
             self._pgc_cache[ref] = value
         else:
             self._ggc_cache[ref] = value  # type: ignore aGC is always dict compatible.
+        self.add([value])
 
     def __copy__(self) -> NoReturn:
         """Make sure we do not copy the GPC."""

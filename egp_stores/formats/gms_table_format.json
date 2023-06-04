@@ -1,33 +1,33 @@
 {
     "_e_count": {
         "default": "0",
-        "type": "INTEGER",
-        "ggc_only": true
+        "ggc_only": true,
+        "type": "INTEGER"
     },
     "_evolvability": {
         "default": "0.0",
-        "type": "REAL",
-        "ggc_only": true
+        "ggc_only": true,
+        "type": "REAL"
     },
     "_pgc_e_count": {
         "nullable": true,
-        "type": "INTEGER[16]",
-        "pgc_only": true
+        "pgc_only": true,
+        "type": "INTEGER[16]"
     },
     "_pgc_evolvability": {
         "nullable": true,
-        "type": "REAL[16]",
-        "pgc_only": true
+        "pgc_only": true,
+        "type": "REAL[16]"
     },
     "_pgc_f_count": {
         "nullable": true,
-        "type": "INTEGER[16]",
-        "pgc_only": true
+        "pgc_only": true,
+        "type": "INTEGER[16]"
     },
     "_pgc_fitness": {
         "nullable": true,
-        "type": "REAL[16]",
-        "pgc_only": true
+        "pgc_only": true,
+        "type": "REAL[16]"
     },
     "_reference_count": {
         "default": "0",
@@ -57,15 +57,15 @@
     },
     "e_count": {
         "default": "1",
+        "ggc_only": true,
         "type": "INTEGER",
-        "volatile": true,
-        "ggc_only": true
+        "volatile": true
     },
     "evolvability": {
         "default": "1.0",
+        "ggc_only": true,
         "type": "REAL",
-        "volatile": true,
-        "ggc_only": true
+        "volatile": true
     },
     "generation": {
         "default": "0",
@@ -84,11 +84,23 @@
         "nullable": true,
         "type": "BYTEA"
     },
+    "lost_descendants": {
+        "default": 0,
+        "type": "BIGINT"
+    },
     "meta_data": {
+        "init_only": true,
         "nullable": true,
         "type": "BYTEA",
-        "volatile": true,
-        "init_only": true
+        "volatile": true
+    },
+    "missing_links_a": {
+        "default": 0,
+        "type": "BIGINT"
+    },
+    "missing_links_b": {
+        "default": 0,
+        "type": "BIGINT"
     },
     "num_codes": {
         "default": "0",
@@ -126,27 +138,27 @@
     },
     "pgc_e_count": {
         "nullable": true,
+        "pgc_only": true,
         "type": "INTEGER[16]",
-        "volatile": true,
-        "pgc_only": true
+        "volatile": true
     },
     "pgc_evolvability": {
         "nullable": true,
+        "pgc_only": true,
         "type": "REAL[16]",
-        "volatile": true,
-        "pgc_only": true
+        "volatile": true
     },
     "pgc_f_count": {
         "nullable": true,
+        "pgc_only": true,
         "type": "INTEGER[16]",
-        "volatile": true,
-        "pgc_only": true
+        "volatile": true
     },
     "pgc_fitness": {
         "nullable": true,
+        "pgc_only": true,
         "type": "REAL[16]",
-        "volatile": true,
-        "pgc_only": true
+        "volatile": true
     },
     "properties": {
         "default": "0",
