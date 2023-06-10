@@ -9,7 +9,7 @@ Each graph is a view of the same base graph with edges labelled as ancestors or 
 """
 
 from logging import DEBUG, Logger, NullHandler, getLogger
-from typing import Any
+from typing import Any, Callable
 
 from egp_types.aGC import aGC
 from graph_tool import Graph, GraphView
@@ -36,6 +36,12 @@ _R_DIST_A = 'r_dist_a'
 _R_DIST_B = 'r_dist_b'
 
 
+# Default
+def _from_higher_layer(_: int) -> bool:
+    """Default function to test if a GC is from a higher layer."""
+    raise NotImplementedError
+
+
 class gene_pool_cache_graph():
     """Provides graph based storage for genetic material.
 
@@ -49,6 +55,9 @@ class gene_pool_cache_graph():
         self._vacant_indices: list[int] = []
         self.refs: Any = self._graph.vp['ref']
 
+        # Defined by the GP sub-process initialisation function
+        self.from_higher_layer: Callable[[int], bool] = _from_higher_layer
+
         # Ancestry & structure views of the graph
         self._graph.ep[_STRUCTURE] = self._graph.new_edge_property('bool', val=False)
         self._structure = GraphView(self._graph, efilt=self._graph.ep[_STRUCTURE])
@@ -61,6 +70,12 @@ class gene_pool_cache_graph():
         self._graph.ep[_R_DIST_B] = self._graph.new_edge_property('int32_t', val=1)
 
     def __getitem__(self, _: int) -> aGC:
+        """Get a GC from the GPC.
+
+        Args
+        ----
+        _: Reference of GC to get.
+        """
         raise NotImplementedError
 
     def add(self, gcs: list[aGC]) -> None:
@@ -103,7 +118,8 @@ class gene_pool_cache_graph():
     def remove(self, refs: list[int]) -> list[int]:
         """Remove GC nodes from the GMS graph.
 
-        Nodes can only be removed from the GMS graph if they have no incoming structure edges.
+        Nodes can only be removed from the GMS graph if they have no incoming structure edges and
+        are not from a higher layer.
         Note that nodes are not deleted just the edges removed and the node marked as vacant..get(_MISSING_B, 0)
 
         Args
@@ -111,7 +127,8 @@ class gene_pool_cache_graph():
         gcs: References of GCs to remove.
         """
         in_struct_edges = self._graph.get_in_degrees([self[ref].get(_VIDX, -1) for ref in refs], self._graph.ep['Structure'])
-        victims: list[aGC] = [self[ref] for ref, in_struct in zip(refs, in_struct_edges) if in_struct == 0]
+        fhl_list = [self.from_higher_layer(ref) for ref in refs]
+        victims: list[aGC] = [self[ref] for ref, ise, fhl in zip(refs, in_struct_edges, fhl_list) if not ise and not fhl]
         victims_refs = []
         while victims:
             vgc: aGC = victims.pop()
@@ -167,14 +184,16 @@ class gene_pool_cache_graph():
                 sgc = self[sgc_ref]
 
                 # If there is more than 1 incoming structure edge the sGC is not removed.
-                if sum(sep[e] for e in vertex.in_edges()) == 1:
+                # GC's imported from higher layers are not removed even if they have only 1 incoming structure edge.
+                if sum(sep[e] for e in vertex.in_edges()) == 1 and not self.from_higher_layer(sgc_ref):
                     victims.append(sgc)
 
                 # Remove the structure edge
                 self._graph.remove_edge(structure_edge)
 
-            # Nothing should connect to or from this vertex
+            # Sanity checks
             if _LOG_DEBUG:
+                assert not self.from_higher_layer(vgc_ref), 'GC being removed is from a higher layer!'
                 assert self._graph.vertex(vgc_idx).in_degree() == 0, 'GC being removed has incoming edges!'
                 assert self._graph.vertex(vgc_idx).out_degree() == 0, 'GC being removed has outgoing edges!'
 

@@ -12,7 +12,7 @@ from egp_types.conversions import (compress_json, decompress_json,
                                    memoryview_to_bytes)
 from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
-from egp_types.reference import ref_from_sig, ref_str, reference
+from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, isGLGC
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_utils.common import merge
 from egp_population.typing import PopulationConfigNorm
@@ -248,6 +248,9 @@ class gene_pool(genetic_material_store):
         self.gpspuid = next(self._tables['meta_data'].update(_GPSPUID_UPDATE_SQL, returning=('next_GPSPUID',), container='tuple'))[0]
         assert self.gpspuid < 0x7FFFFFFF, 'GPSPUID out of range!'
         self.next_reference = partial(reference, gpspuid=self.gpspuid, counter=count())
+
+        # GPC needs to know which process it is being used in so it can identify GC's created by this process.
+        self.pool.from_higher_layer = lambda x: not isGLGC(x) and not get_gpspuid(x) == self.gpspuid
 
         # We could set the creator field for every table in self._tables to False but that would cause unnecessary page copies
         # and we do not use it. Noted just in case that changes.
