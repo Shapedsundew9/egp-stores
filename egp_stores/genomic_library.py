@@ -32,7 +32,7 @@ _NULL_GC_DATA: dict[str, int | bool] = {
     'properties': 0,
     '_stored': True
 }
-_DATA_FILE_FOLDER: str = join(dirname(__file__), 'data')
+DATA_FILE_FOLDER: str = join(dirname(__file__), 'data')
 _DATA_FILES: list[str] = ['codons.json', 'mutations.json']
 
 
@@ -146,7 +146,7 @@ class genomic_library(genetic_material_store):
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(gl_sql_functions(), read=False)
             for data_file in _DATA_FILES:
-                abspath: str = join(_DATA_FILE_FOLDER, data_file)
+                abspath: str = join(DATA_FILE_FOLDER, data_file)
                 _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
                 with open(abspath, "r", encoding='utf-8') as file_ptr:
                     self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
