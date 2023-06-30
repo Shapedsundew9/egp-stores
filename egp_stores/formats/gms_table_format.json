@@ -85,7 +85,7 @@
         "type": "BYTEA"
     },
     "lost_descendants": {
-        "default": 0,
+        "default": "0",
         "type": "BIGINT"
     },
     "meta_data": {
@@ -93,14 +93,6 @@
         "nullable": true,
         "type": "BYTEA",
         "volatile": true
-    },
-    "missing_links_a": {
-        "default": 0,
-        "type": "BIGINT"
-    },
-    "missing_links_b": {
-        "default": 0,
-        "type": "BIGINT"
     },
     "num_codes": {
         "default": "0",

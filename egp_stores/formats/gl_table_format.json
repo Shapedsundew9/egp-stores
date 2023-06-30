@@ -9,6 +9,16 @@
         "type": "BYTEA",
         "signature": true
     },
+    "closest_surviving_ancestor_a": {
+        "nullable": true,
+        "type": "BYTEA",
+        "signature": true
+    },
+    "closest_surviving_ancestor_b": {
+        "nullable": true,
+        "type": "BYTEA",
+        "signature": true
+    },
     "creator": {
         "nullable": true,
         "type": "UUID"
@@ -22,6 +32,14 @@
         "nullable": true,
         "type": "BYTEA",
         "signature": true
+    },
+    "missing_links_a": {
+        "default": "0",
+        "type": "BIGINT"
+    },
+    "missing_links_b": {
+        "default": "0",
+        "type": "BIGINT"
     },
     "pgc": {
         "nullable": true,

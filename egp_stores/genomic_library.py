@@ -33,7 +33,7 @@ _NULL_GC_DATA: dict[str, int | bool] = {
     '_stored': True
 }
 DATA_FILE_FOLDER: str = join(dirname(__file__), 'data')
-_DATA_FILES: list[str] = ['codons.json', 'mutations.json']
+_DATA_FILES: list[str] = [join(DATA_FILE_FOLDER, data_file) for data_file in ('codons.json', 'mutations.json')]
 
 
 # Tree structure
@@ -126,7 +126,7 @@ class genomic_library(genetic_material_store):
     that is not in the genomic library.
     """
 
-    def __init__(self, config: TableConfig | TableConfigNorm = _DEFAULT_CONFIG) -> None:
+    def __init__(self, config: TableConfig | TableConfigNorm = _DEFAULT_CONFIG, data_files: list[str] = _DATA_FILES) -> None:
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple
@@ -145,10 +145,9 @@ class genomic_library(genetic_material_store):
         self.recursive_select: Callable[..., RowIter] = self.library.recursive_select
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(gl_sql_functions(), read=False)
-            for data_file in _DATA_FILES:
-                abspath: str = join(DATA_FILE_FOLDER, data_file)
-                _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': abspath}}))
-                with open(abspath, "r", encoding='utf-8') as file_ptr:
+            for data_file in data_files:
+                _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': data_file}}))
+                with open(data_file, "r", encoding='utf-8') as file_ptr:
                     self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def __getitem__(self, signature) -> Any:
