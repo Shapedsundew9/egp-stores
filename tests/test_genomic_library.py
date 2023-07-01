@@ -38,4 +38,4 @@ def test_simple_GL_load() -> None:
     config['database']['dbname'] = 'simple_db'
     config['delete_table'] = True
     gl: genomic_library = genomic_library(config, [join(dirname(__file__), 'data/simple_gl.json')])
-    assert gl
+    assert gl.validate()
