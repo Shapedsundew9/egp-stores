@@ -15,7 +15,7 @@ from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, isGLGC
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_utils.common import merge
-from egp_population.typing import PopulationConfigNorm
+from egp_population.egp_typing import PopulationConfigNorm
 from pypgtable import table
 from pypgtable.typing import Conversions, PtrMap, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator

@@ -1,3 +1,5 @@
+import pytest
+
 from copy import deepcopy
 from logging import INFO, Logger, NullHandler, getLogger
 from math import isclose
@@ -5,13 +7,15 @@ from pprint import pformat
 from sys import getsizeof
 from time import time
 from typing import Any
+from random import random
+from os.path import dirname, join
+from json import load
+from numpy import ndarray
 
-import pytest
-from egp_types.gc_type_tools import is_pgc
+from egp_types.gc_type_tools import is_pgc, PHYSICAL_PROPERTY
 from egp_types.reference import ref_str
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_types.xGC import xGC
-from numpy import ndarray
 from pympler.asizeof import asizeof
 from surebrec.surebrec import _logger as _surebrec_logger
 from surebrec.surebrec import generate
@@ -23,10 +27,35 @@ _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
+# Use surebrec random data generation. This is a lot slower than using the predefined test data from simple_gl.json
+# It is also less robust due to the blending of pGC & gGC schemas into one.
+USE_SUREBREC = False
+
+
+def choose_p(ggc: dict[str, Any]) -> dict[str, Any]:
+    """Corrects a randomly generated GGC entry to be conformant with the pGC schema 50% of the time"""
+    if random() < 0.5:
+        for key in filter(lambda x: 'pgc_' in x, ggc.keys()):
+            ggc[key] = None
+    elif ggc.get('input_types', []) and ggc.get('output_types', []):
+        if -3 not in ggc['input_types']:
+            ggc['input_types'][0] = -3
+        if -3 not in ggc['output_types']:
+            ggc['output_types'][0] = -3
+        ggc['properties'] = ggc['properties'] | PHYSICAL_PROPERTY
+    return ggc
+
 # Test data conformant with GGC schema
 gGC_entry_validator.schema['inputs']['required'] = True
 gGC_entry_validator.schema['outputs']['required'] = True
-_TEST_DATA: dict[int, dict[str, Any]] = {ggc['ref']: ggc for ggc in generate(gGC_entry_validator, 100, -1022196250, True)}
+
+_TEST_DATA: dict[int, dict[str, Any]]
+if USE_SUREBREC:
+    _TEST_DATA = {ggc['ref']: choose_p(ggc) for ggc in generate(gGC_entry_validator, 100, -1022196250, True)}
+else:
+    with open(join(dirname(__file__), 'data/simple_gl.json'), 'r', encoding='utf-8') as fptr:
+        # FIXME: simple_gl is in GL entry format & we need to convert to GP entry format
+        _TEST_DATA = {ggc['ref']: ggc for ggc in load(fptr)}
 
 
 def element_is_match(a: Any, b: Any) -> bool:

@@ -39,7 +39,6 @@
         "volatile": true
     },
     "alpha_class": {
-        "default": "ARRAY[0.0, 0.0, 0.0, 0.0]",
         "type": "REAL[4]",
         "volatile": true
     },
