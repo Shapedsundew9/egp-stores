@@ -13,5 +13,12 @@
         "indexed": false,
         "nullable": false,
         "default": "-1"
+    },
+    "active": {
+        "description": "User defined field to mark a GC as active for evolution or not.",
+        "type": "BOOLEAN",
+        "indexed": false,
+        "nullable": false,
+        "default": "false"
     }
 }

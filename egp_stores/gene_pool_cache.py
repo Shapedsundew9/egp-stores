@@ -54,6 +54,7 @@ from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from re import Match, search
 from typing import Any, Callable, Generator, Literal, NoReturn
+from functools import lru_cache
 
 from egp_types.aGC import aGC
 from egp_types.gc_type_tools import is_pgc
@@ -156,7 +157,7 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
     fields: dict[str, Field] = {}
     for column, definition in table_format_json.items():
         match: Match[str] | None = search(_REGEX, definition['type'])
-        assert match is not None, f"definition['type'] = {definition['type']} which cannt be parsed!"
+        assert match is not None, f"definition['type'] = {definition['type']} which cannot be parsed!"
         typ: str = 'LIST'
         if match is not None and '[]' not in definition['type']:
             typ = match.group(1)
@@ -215,6 +216,8 @@ class gene_pool_cache(gene_pool_cache_graph):
             else:
                 del self._pgc_cache[_ref]
 
+    # TODO: Add cache stats to the log output.
+    @lru_cache(maxsize=1024)
     def __getitem__(self, ref: int) -> xGC:
         """Return an gGC dict-like structure from the GPC.
 
@@ -257,6 +260,39 @@ class gene_pool_cache(gene_pool_cache_graph):
     def __deepcopy__(self, obj: Any) -> NoReturn:
         """Make sure we do not copy GPC."""
         assert False, "Deep copy of the GPC."
+
+    def get_list(self, refs: list[int] | tuple[int, ...] | Generator[int, None, None]) -> list[xGC]:
+        """Return a list of xGCs from the GPC.
+
+        Args
+        ----
+        refs: A list of GC references.
+
+        Returns
+        -------
+        A list of xGCs.
+        """
+        return [self._ggc_cache[ref] if ref in self._ggc_refs else self._pgc_cache[ref] for ref in refs]
+    
+    def find(self, field: str, value: Any, ggc_only: bool = True) -> Generator[xGC, None, None]:
+        """Find all GC's with a field matching value.
+
+        Args
+        ----
+        field: The field name to match.
+        value: The value to match.
+        ggc_only: If True only gGC's are searched else only pGC's are searched as well. The most common
+            use case is to only search gGC's of a problem population.
+
+        Returns
+        -------
+        A generator of xGC's.
+        """
+        for ggc in self._ggc_cache.find(field, value):
+            yield ggc
+        if not ggc_only:
+            for pgc in self._pgc_cache.find(field, value):
+                yield pgc
 
     def keys(self) -> Generator[int, None, None]:
         """A view of the references in the GPC."""
