@@ -219,7 +219,7 @@ class gene_pool_cache(gene_pool_cache_graph):
     # TODO: Add cache stats to the log output.
     @lru_cache(maxsize=1024)
     def __getitem__(self, ref: int) -> xGC:
-        """Return an gGC dict-like structure from the GPC.
+        """Return an xGC dict-like structure from the GPC.
 
         Args
         ----
@@ -232,6 +232,24 @@ class gene_pool_cache(gene_pool_cache_graph):
         if ref in self._ggc_refs:
             return self._ggc_cache[ref]
         return self._pgc_cache[ref]
+
+    def get(self, ref: int, default: xGC | None = None) -> xGC | None:
+        """Return an xGC dict-like structure from the GPC or default.
+
+        Args
+        ----
+        ref: GPC unique GC reference.
+        default: Return if ref not in the GPC. 
+
+        Returns
+        -------
+        xGC with ref or default
+        """
+        if ref in self._ggc_refs:
+            return self._ggc_cache[ref]
+        if ref in self._pgc_cache:
+            return self._pgc_cache[ref]
+        return default
 
     def __len__(self) -> int:
         """The number of entries."""
@@ -248,7 +266,7 @@ class gene_pool_cache(gene_pool_cache_graph):
         value: A dict-like object defining at least the required fields of a gGC.
         """
         if is_pgc(value):
-            self._pgc_cache[ref] = value
+            self._pgc_cache[ref] = value  # type: ignore aGC is always dict compatible.
         else:
             self._ggc_cache[ref] = value  # type: ignore aGC is always dict compatible.
         self.add([value])

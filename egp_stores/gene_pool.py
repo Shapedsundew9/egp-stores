@@ -227,6 +227,7 @@ class gene_pool(genetic_material_store):
         # for the other tables to be created.
         self._tables: dict[str, table] = {k: table(v) for k, v in self.config.items()}
         _logger.info('Established connections to gene pool tables.')
+        self.select = self._tables['gene_pool'].select
 
         # Modify the update strings to use the right table for the gene pool.
         self._update_str: str = UPDATE_STR.replace('__table__', self.config['gene_pool']['table'])
