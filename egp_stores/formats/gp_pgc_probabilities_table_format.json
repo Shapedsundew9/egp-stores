@@ -1,0 +1,14 @@
+{
+    "f_prob": {
+        "type": "REAL",
+        "description": "The fitness probabilies for a pGC layer."
+    },
+    "e_prob": {
+        "type": "REAL",
+        "description": "The evolvability probabilies for a pGC layer."
+    },
+    "ref": {
+        "type": "BIGINT",
+        "description": "The pGC reference assocaited with the layer probabilities."
+    }
+}

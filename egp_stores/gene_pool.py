@@ -11,7 +11,7 @@ from typing import Any, Literal, Callable
 from egp_types.conversions import (compress_json, decompress_json,
                                    memoryview_to_bytes)
 from egp_types.gc_graph import gc_graph
-from egp_types.gc_type_tools import NUM_PGC_LAYERS
+from egp_types.gc_type_tools import NUM_PGC_LAYERS, PHYSICAL_PROPERTY
 from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, isGLGC
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_utils.common import merge
@@ -81,6 +81,8 @@ with open(join(dirname(__file__), "formats/gp_pgc_metrics_table_format.json"), "
     _GP_PGC_METRICS_TABLE_SCHEMA: TableSchema = load(file_ptr)
 with open(join(dirname(__file__), "formats/gp_meta_table_format.json"), "r", encoding="utf8") as file_ptr:
     _GP_META_TABLE_SCHEMA: TableSchema = load(file_ptr)
+with open(join(dirname(__file__), "formats/gp_pgc_probabilities_table_format.json"), "r", encoding="utf8") as file_ptr:
+    _GP_PGC_PROB_TABLE_SCHEMA: TableSchema = load(file_ptr)
 
 
 # GC queries
@@ -137,7 +139,7 @@ _DEFAULT_CONFIGS: GenePoolConfigNorm = {
     'gene_pool': _DEFAULT_GP_CONFIG,
     'meta_data': _DEFAULT_GP_META_CONFIG,
     'gp_metrics': _DEFAULT_GP_METRICS_CONFIG,
-    'pgc_metrics': _DEFAULT_PGC_METRICS_CONFIG,
+    'pgc_metrics': _DEFAULT_PGC_METRICS_CONFIG
 }
 
 
@@ -222,6 +224,9 @@ class gene_pool(genetic_material_store):
             for table_config in self.config.values():
                 if 'create_table' in table_config:
                     table_config['create_table'] = True
+            
+            # Expand 
+
 
         # If this process did not create the gene pool table the following line will wait
         # for the other tables to be created.
@@ -263,12 +268,11 @@ class gene_pool(genetic_material_store):
 
     def _populate_local_cache(self) -> None:
         """Gather the latest and greatest from the GP.
-
-        1. Load all the codons.
-        2. For each population select the population size with the highest survivability.
-        3. Pull in the pGC's that created all the selected population & sub-gGCs
-        4. Pull in the best pGC's at each layer.
-        5. If not enough quality population pull from higher layer or create eGC's.
+            1. Load all the codons.
+            2. For each population select the population size with the highest survivability.
+            3. Pull in the pGC's that created all the selected population & sub-gGCs
+            4. Pull in the best pGC's at each layer.
+            5. If not enough quality population pull from higher layer or create eGC's.
         """
         self.pull(list(self.glib.select(_LOAD_CODONS_SQL, columns=('signature',), container='tuple')))
         for population in self._populations.values():
@@ -287,6 +291,7 @@ class gene_pool(genetic_material_store):
                 literals['layer'] = layer
                 for pgc in self._pool.select(_LOAD_PGC_SQL, literals):
                     self.pool[pgc['ref']] = pgc
+
 
     def _ref_from_sig(self, sig: bytes | None) -> int | None:
         """Convert a signature to a reference handling clashes.
