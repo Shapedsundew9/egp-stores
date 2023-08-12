@@ -55,10 +55,12 @@ from os.path import dirname, join
 from re import Match, search
 from typing import Any, Callable, Generator, Literal, NoReturn
 from functools import lru_cache
+from random import choice
+from numpy.random import choice as np_choice
 
 from egp_types.aGC import aGC
 from egp_types.gc_type_tools import is_pgc
-from egp_types.xGC import xGC
+from egp_types.xGC import xGC, pGC
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
 from egp_utils.packed_store import packed_store, indexed_store, Field
@@ -291,7 +293,7 @@ class gene_pool_cache(gene_pool_cache_graph):
         A list of xGCs.
         """
         return [self._ggc_cache[ref] if ref in self._ggc_refs else self._pgc_cache[ref] for ref in refs]
-    
+
     def find(self, field: str, value: Any, ggc_only: bool = True) -> Generator[xGC, None, None]:
         """Find all GC's with a field matching value.
 
@@ -327,6 +329,22 @@ class gene_pool_cache(gene_pool_cache_graph):
         """All pGC references in the GPC."""
         return list(self._pgc_refs.keys())
 
+    def random_pgc(self, depth: int = 0) -> pGC:
+        """A weighted random pGC from the GPC."""
+        ref_allocs, fitness_allocs =  self._pgc_cache.get_allocation(('ref', 'pgc_fitness'))
+        allocation_sums = [fitness[depth].sum() for fitness in fitness_allocs]
+
+        # No pGC's with non-zero fitness (i.e. all pGC's a unused codons)
+        total_weight = sum(allocation_sums)
+        if total_weight == 0:
+            return self._pgc_cache[choice(tuple(self._pgc_refs.keys()))]
+        
+        # Weighted random selection of allocation
+        allocation_idx = np_choice(tuple(range(len(allocation_sums))), p=[x / total_weight for x in allocation_sums])
+        refs = ref_allocs[allocation_idx]
+        f: float64 = fitness_allocs[allocation_idx][depth]
+        return self._pgc_cache[refs[np_choice(tuple(range(len(refs))), p=f / f.sum())]]
+    
     def items(self) -> Generator[tuple[int, xGC], None, None]:
         """A view of the gGCs in the GPC."""
         for ref in self._ggc_refs:

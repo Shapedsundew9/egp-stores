@@ -11,7 +11,7 @@ from typing import Any, Literal, Callable
 from egp_types.conversions import (compress_json, decompress_json,
                                    memoryview_to_bytes)
 from egp_types.gc_graph import gc_graph
-from egp_types.gc_type_tools import NUM_PGC_LAYERS, PHYSICAL_PROPERTY
+from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, isGLGC
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_utils.common import merge
@@ -224,9 +224,6 @@ class gene_pool(genetic_material_store):
             for table_config in self.config.values():
                 if 'create_table' in table_config:
                     table_config['create_table'] = True
-            
-            # Expand 
-
 
         # If this process did not create the gene pool table the following line will wait
         # for the other tables to be created.
