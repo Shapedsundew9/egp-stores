@@ -49,28 +49,27 @@ Bit of an anti-pattern for python but in this case the savings are worth it.
 """
 
 from copy import deepcopy
+from functools import lru_cache
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
+from random import choice
 from re import Match, search
 from typing import Any, Callable, Generator, Literal, NoReturn
-from functools import lru_cache
-from random import choice
-from numpy.random import choice as np_choice
 
 from egp_types.aGC import aGC
 from egp_types.gc_type_tools import is_pgc
-from egp_types.xGC import xGC, pGC
+from egp_types.xGC import pGC, xGC
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
-from egp_utils.packed_store import packed_store, indexed_store, Field
-from numpy import bool_, float32, float64, int16, int32, int64
+from egp_utils.packed_store import Field, indexed_store, packed_store
+from numpy import bool_, double, float32, int16, int32, int64
+from numpy.random import choice as np_choice
 from pypgtable.typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
-from .gene_pool_common import GP_RAW_TABLE_SCHEMA
 from .gene_pool_cache_graph import gene_pool_cache_graph
-
+from .gene_pool_common import GP_RAW_TABLE_SCHEMA
 
 # Logging
 _logger: Logger = getLogger(__name__)
@@ -114,8 +113,8 @@ sql_np_mapping: dict[str, Any] = {
     'BIGINT': int64,
     'BIGSERIAL': int64,
     'BOOLEAN': bool_,
-    'DOUBLE PRECISION': float64,
-    'FLOAT8': float64,
+    'DOUBLE PRECISION': double,
+    'FLOAT8': double,
     'FLOAT4': float32,
     'INT': int32,
     'INT8': int64,
@@ -342,7 +341,7 @@ class gene_pool_cache(gene_pool_cache_graph):
         # Weighted random selection of allocation
         allocation_idx = np_choice(tuple(range(len(allocation_sums))), p=[x / total_weight for x in allocation_sums])
         refs = ref_allocs[allocation_idx]
-        f: float64 = fitness_allocs[allocation_idx][depth]
+        f: double = fitness_allocs[allocation_idx][depth]
         return self._pgc_cache[refs[np_choice(tuple(range(len(refs))), p=f / f.sum())]]
     
     def items(self) -> Generator[tuple[int, xGC], None, None]:
