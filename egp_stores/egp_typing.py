@@ -1,6 +1,6 @@
 """ EGP stores typing."""
 from typing import NotRequired, TypedDict
-from pypgtable.typing import TableConfigNorm, TableConfig
+from pypgtable.pypgtable_typing import TableConfigNorm, TableConfig
 
 
 class GenePoolConfig(TypedDict):
