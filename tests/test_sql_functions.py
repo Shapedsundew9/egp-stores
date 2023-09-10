@@ -19,53 +19,36 @@ VCset = tuple[VCpair, VCpair, VCpair]
 _DEFAULT_VALUE: float = 1.0
 _DEFAULT_COUNT: Literal[1] = 1
 _SQL_STR: str = (
-    'SELECT weighted_fixed_array_update({cscv}::REAL[], {cscc}::INT[], {pscv}::REAL[], {pscc}::INT[], {cspv}::REAL[], {cspc}::INT[]),'
-    ' fixed_array_update({cscc}::INT[], {pscc}::INT[], {cspc}::INT[]),'
-    ' {tv}, {tc} FROM test_table')
+    "SELECT weighted_fixed_array_update({cscv}::REAL[], {cscc}::INT[], {pscv}::REAL[], {pscc}::INT[], {cspv}::REAL[], {cspc}::INT[]),"
+    " fixed_array_update({cscc}::INT[], {pscc}::INT[], {cspc}::INT[]),"
+    " {tv}, {tc} FROM test_table"
+)
 _CONFIG: dict[str, Any] = {
-    'database': {
-        'dbname': 'test_db'
+    "database": {"dbname": "test_db"},
+    "table": "test_table",
+    "schema": {
+        "idx": {"type": "INTEGER"},
+        "cscv": {"type": "REAL[]"},
+        "cscc": {"type": "INT[]"},
+        "pscv": {"type": "REAL[]"},
+        "pscc": {"type": "INT[]"},
+        "cspv": {"type": "REAL[]"},
+        "cspc": {"type": "INT[]"},
+        "tv": {"type": "REAL[]"},
+        "tc": {"type": "INT[]"},
     },
-    'table': 'test_table',
-    'schema': {
-        'idx': {
-            'type': 'INTEGER'
-        },
-        'cscv': {
-            'type': 'REAL[]'
-        },
-        'cscc': {
-            'type': 'INT[]'
-        },
-        'pscv': {
-            'type': 'REAL[]'
-        },
-        'pscc': {
-            'type': 'INT[]'
-        },
-        'cspv': {
-            'type': 'REAL[]'
-        },
-        'cspc': {
-            'type': 'INT[]'
-        },
-        'tv': {
-            'type': 'REAL[]'
-        },
-        'tc': {
-            'type': 'INT[]'
-        }
-    },
-    'data_files': [],
-    'delete_db': False,
-    'delete_table': True,
-    'create_db': True,
-    'create_table': True,
-    'wait_for_db': False,
-    'wait_for_table': False
+    "data_files": [],
+    "delete_db": False,
+    "delete_table": True,
+    "create_db": True,
+    "create_table": True,
+    "wait_for_db": False,
+    "wait_for_table": False,
 }
 
-with open(join(dirname(__file__), "../egp_stores/formats/meta_table_format.json"), "r") as file_ptr:
+with open(
+    join(dirname(__file__), "../egp_stores/formats/meta_table_format.json"), "r"
+) as file_ptr:
     _META_TABLE_SCHEMA = load(file_ptr)
 
 
@@ -89,18 +72,24 @@ def _random_pair(length, base: VCpair | None = None) -> VCpair:
     """
     if base is None:
         values: list[float] = [random() for _ in range(length)]
-        variable_vector_weights_update: list[int] = [randint(1, 50000) for _ in range(length)]
+        variable_vector_weights_update: list[int] = [
+            randint(1, 50000) for _ in range(length)
+        ]
     else:
         counts: list[int] = [randint(1, 50000) for _ in base[1]]
         variable_vector_weights_update = [b + c for c, b in zip(counts, base[1])]
-        values = [v + (((1 - v) * random()) * c) / (b + c) for c, v, b in zip(counts, base[0], base[1])]
-        variable_vector_weights_update.extend([_DEFAULT_COUNT] * (len(base[0]) - length))
+        values = [
+            v + (((1 - v) * random()) * c) / (b + c)
+            for c, v, b in zip(counts, base[0], base[1])
+        ]
+        variable_vector_weights_update.extend(
+            [_DEFAULT_COUNT] * (len(base[0]) - length)
+        )
         values.extend([_DEFAULT_VALUE] * (len(base[0]) - length))
     return values, variable_vector_weights_update
 
 
-def _random_set(lengths: tuple[int, int, int]) -> tuple[VCpair,
-                                                        VCpair, VCpair]:
+def _random_set(lengths: tuple[int, int, int]) -> tuple[VCpair, VCpair, VCpair]:
     """Generate a full set of array parameters based on the lengths provided.
 
     The arrays are returned as ((cscv, cscc), (pscv, pscc), (cspv, cspc))
@@ -125,10 +114,16 @@ def _random_set(lengths: tuple[int, int, int]) -> tuple[VCpair,
     base_cscc.extend([_DEFAULT_COUNT] * (lengths[2] - lengths[0]))
     base_pscv.extend([_DEFAULT_VALUE] * (lengths[1] - lengths[0]))
     base_cscv.extend([_DEFAULT_VALUE] * (lengths[2] - lengths[0]))
-    return _random_pair(lengths[0], (base_cscv, base_cscc)), _random_pair(lengths[0], (base_pscv, base_pscc)), csp
+    return (
+        _random_pair(lengths[0], (base_cscv, base_cscc)),
+        _random_pair(lengths[0], (base_pscv, base_pscc)),
+        csp,
+    )
 
 
-def _random_length(criteria: Literal['<'] | Literal['>'] | Literal['='], csp_len: int) -> int:
+def _random_length(
+    criteria: Literal["<"] | Literal[">"] | Literal["="], csp_len: int
+) -> int:
     """Generate a length meeting the criteria.
 
     > return a length greater than csp_len (max csp_len * 2)
@@ -145,18 +140,20 @@ def _random_length(criteria: Literal['<'] | Literal['>'] | Literal['='], csp_len
     -------
     A length meeting the criteria.
     """
-    if criteria == '<':
+    if criteria == "<":
         x_len: int = csp_len - randint(1, csp_len)
         if not x_len:
             x_len = 1
-    elif criteria == '>':
+    elif criteria == ">":
         x_len = csp_len + randint(1, csp_len)
     else:
         x_len = csp_len
     return x_len
 
 
-def _random_lengths(criteria: tuple[Literal['<', '>', '='], Literal['<', '>', '=']]) -> tuple[int, int, int]:
+def _random_lengths(
+    criteria: tuple[Literal["<", ">", "="], Literal["<", ">", "="]]
+) -> tuple[int, int, int]:
     """Generate a tuple of random lengths meeting the criteria.
 
     The maximum length of any array is 200.
@@ -175,8 +172,7 @@ def _random_lengths(criteria: tuple[Literal['<', '>', '='], Literal['<', '>', '=
     return csp_len, csp_len, csp_len
 
 
-def _combo_generator() -> Generator[tuple[VCpair,
-                                          VCpair, VCpair], None, None]:
+def _combo_generator() -> Generator[tuple[VCpair, VCpair, VCpair], None, None]:
     """Generate all combinations of random parameter array lengths.
 
     The update_array() SQL function takes 3 pairs of variable length arrays:
@@ -203,12 +199,11 @@ def _combo_generator() -> Generator[tuple[VCpair,
     ((list(float), list(int)), (list(float), list(int)), (list(float), list(int)))
     """
     while True:
-        for combo in (('<', '<'), ('<', '='), ('=', '<'), ('=', '=')):
+        for combo in (("<", "<"), ("<", "="), ("=", "<"), ("=", "=")):
             yield _random_set(_random_lengths(combo))
 
 
-def _expected_result(array_set: tuple[VCpair, VCpair,
-                     VCpair]) -> VCpair:
+def _expected_result(array_set: tuple[VCpair, VCpair, VCpair]) -> VCpair:
     """Calculate the result we should expect.
 
     Input data is sanity checked.
@@ -231,7 +226,9 @@ def _expected_result(array_set: tuple[VCpair, VCpair,
     cspv: list[float] = array_set[2][0]
     cspc: list[int] = array_set[2][1]
 
-    max_len: int = max((len(cscv), len(cscc), len(pscv), len(pscc), len(cspv), len(cspc)))
+    max_len: int = max(
+        (len(cscv), len(cscc), len(pscv), len(pscc), len(cspv), len(cspc))
+    )
     while len(cscv) < max_len:
         cscv.append(1.0)
     while len(cscc) < max_len:
@@ -303,7 +300,9 @@ def _create_testcases(n):
     list(dict): Output of _generate_test_case()
          in a dictionary format.
     """
-    testcase_generator: Generator[tuple[VCset, VCpair], None, None] = _generate_test_case()
+    testcase_generator: Generator[
+        tuple[VCset, VCpair], None, None
+    ] = _generate_test_case()
     testcases: list[dict[str, Any]] = []
     for idx in range(n):
         testcase: tuple[VCset, VCpair] = next(testcase_generator)
@@ -311,15 +310,15 @@ def _create_testcases(n):
         result: VCpair = testcase[1]
         testcases.append(
             {
-                'idx': idx,
-                'cscv': inputs[0][0],
-                'cscc': inputs[0][1],
-                'pscv': inputs[1][0],
-                'pscc': inputs[1][1],
-                'cspv': inputs[2][0],
-                'cspc': inputs[2][1],
-                'tv': result[0],
-                'tc': result[1]
+                "idx": idx,
+                "cscv": inputs[0][0],
+                "cscc": inputs[0][1],
+                "pscv": inputs[1][0],
+                "pscc": inputs[1][1],
+                "cspv": inputs[2][0],
+                "cspc": inputs[2][1],
+                "tv": result[0],
+                "tc": result[1],
             }
         )
     return testcases
@@ -338,13 +337,13 @@ def meta_table_config(config: dict[str, Any], create: bool = False) -> dict[str,
     (dict): pypgtable config of the genomic library meta table.
     """
     _config: dict[str, Any] = {
-        'table': config['table'] + '_meta',
-        'schema': _META_TABLE_SCHEMA,
-        'database': deepcopy(config['database'])
+        "table": config["table"] + "_meta",
+        "schema": _META_TABLE_SCHEMA,
+        "database": deepcopy(config["database"]),
     }
     if create:
-        _config['delete_table'] = True
-        _config['create_table'] = True
+        _config["delete_table"] = True
+        _config["create_table"] = True
     return _config
 
 
@@ -355,12 +354,14 @@ def test_sql_array_update() -> None:
     t: table = table(_CONFIG)
     if t.raw.creator:
         meta = table(meta_table_config(_CONFIG, create=True))
-        with open(join(dirname(__file__), '../egp_stores/data/gl_functions.sql'), 'r') as fileptr:
+        with open(
+            join(dirname(__file__), "../egp_stores/data/gl_functions.sql"), "r"
+        ) as fileptr:
             sql_text: str = fileptr.read()
-            sql_text = sql_text.replace('__meta_table_name__', meta.raw.config['table'])
-            sql_text = sql_text.replace('__gl_table_name__', t.raw.config['table'])
+            sql_text = sql_text.replace("__meta_table_name__", meta.raw.config["table"])
+            sql_text = sql_text.replace("__gl_table_name__", t.raw.config["table"])
             t.raw.arbitrary_sql(sql_text, read=False)
     t.insert(_create_testcases(300))
     for row in t.raw.arbitrary_sql(_SQL_STR):
-        assert (row[0] == approx(row[2]))
-        assert (row[1] == row[3])
+        assert row[0] == approx(row[2])
+        assert row[1] == row[3]

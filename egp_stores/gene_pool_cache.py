@@ -76,11 +76,12 @@ _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 
-_REGEX: Literal['([A-Z]*)\\[{0,1}(\\d{0,})\\]{0,1}'] = r'([A-Z]*)\[{0,1}(\d{0,})\]{0,1}'
+_REGEX: Literal["([A-Z]*)\\[{0,1}(\\d{0,})\\]{0,1}"] = r"([A-Z]*)\[{0,1}(\d{0,})\]{0,1}"
 
 
 # TODO: Make a new cerberus validator for this extending the pypgtable raw_table_column_config_validator
 # TODO: Definition class below should inherit from pypgtable (when it has a typeddict defined)
+
 
 class ConfigDefinition(SchemaColumn):
     """GPC field configuration."""
@@ -95,43 +96,70 @@ class ConfigDefinition(SchemaColumn):
 
 # Load the GPC config definition which is a superset of the pypgtable column definition
 GPC_FIELD_SCHEMA: dict[str, dict[str, Any]] = deepcopy(PYPGTABLE_COLUMN_CONFIG_SCHEMA)
-with open(join(dirname(__file__), "formats/gpc_field_definition_format.json"), "r", encoding="utf8") as file_ptr:
+with open(
+    join(dirname(__file__), "formats/gpc_field_definition_format.json"),
+    "r",
+    encoding="utf8",
+) as file_ptr:
     merge(GPC_FIELD_SCHEMA, load(file_ptr))
-gpc_field_validator: base_validator = base_validator(GPC_FIELD_SCHEMA, purge_uknown=True)
+gpc_field_validator: base_validator = base_validator(
+    GPC_FIELD_SCHEMA, purge_uknown=True
+)
 GPC_RAW_TABLE_SCHEMA: dict[str, dict[str, Any]] = deepcopy(GP_RAW_TABLE_SCHEMA)
-with open(join(dirname(__file__), "formats/gpc_table_format.json"), "r", encoding="utf8") as file_ptr:
+with open(
+    join(dirname(__file__), "formats/gpc_table_format.json"), "r", encoding="utf8"
+) as file_ptr:
     merge(GPC_RAW_TABLE_SCHEMA, load(file_ptr))
-GPC_TABLE_SCHEMA: dict[str, ConfigDefinition] = {k: gpc_field_validator.normalized(v) for k, v in GPC_RAW_TABLE_SCHEMA.items()}
-GPC_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == '_', GPC_TABLE_SCHEMA)))
-GPC_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GPC_HIGHER_LAYER_COLS)) + ('updated', 'created')
-GPC_REFERENCE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get('reference', False), GPC_TABLE_SCHEMA.items())))
-_GGC_INIT_LAMBDA: Callable[..., bool] = lambda x: not x[1].get('init_only', False) and not x[1].get('pgc_only', False)
-_PGC_INIT_LAMBDA: Callable[..., bool] = lambda x: not x[1].get('init_only', False) and not x[1].get('ggc_only', False)
+GPC_TABLE_SCHEMA: dict[str, ConfigDefinition] = {
+    k: gpc_field_validator.normalized(v) for k, v in GPC_RAW_TABLE_SCHEMA.items()
+}
+GPC_HIGHER_LAYER_COLS: tuple[str, ...] = tuple(
+    (key for key in filter(lambda x: x[0] == "_", GPC_TABLE_SCHEMA))
+)
+GPC_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple(
+    (x[1:] for x in GPC_HIGHER_LAYER_COLS)
+) + ("updated", "created")
+GPC_REFERENCE_COLUMNS: tuple[str, ...] = tuple(
+    (
+        key
+        for key, _ in filter(
+            lambda x: x[1].get("reference", False), GPC_TABLE_SCHEMA.items()
+        )
+    )
+)
+_GGC_INIT_LAMBDA: Callable[..., bool] = lambda x: not x[1].get(
+    "init_only", False
+) and not x[1].get("pgc_only", False)
+_PGC_INIT_LAMBDA: Callable[..., bool] = lambda x: not x[1].get(
+    "init_only", False
+) and not x[1].get("ggc_only", False)
 
 # Lazy add igraph
 sql_np_mapping: dict[str, Any] = {
-    'BIGINT': int64,
-    'BIGSERIAL': int64,
-    'BOOLEAN': bool_,
-    'DOUBLE PRECISION': double,
-    'FLOAT8': double,
-    'FLOAT4': float32,
-    'INT': int32,
-    'INT8': int64,
-    'INT4': int32,
-    'INT2': int16,
-    'INTEGER': int32,
-    'REAL': float32,
-    'SERIAL': int32,
-    'SERIAL8': int64,
-    'SERIAL4': int32,
-    'SERIAL2': int16,
-    'SMALLINT': int16,
-    'SMALLSERIAL': int16
+    "BIGINT": int64,
+    "BIGSERIAL": int64,
+    "BOOLEAN": bool_,
+    "DOUBLE PRECISION": double,
+    "FLOAT8": double,
+    "FLOAT4": float32,
+    "INT": int32,
+    "INT8": int64,
+    "INT4": int32,
+    "INT2": int16,
+    "INTEGER": int32,
+    "REAL": float32,
+    "SERIAL": int32,
+    "SERIAL8": int64,
+    "SERIAL4": int32,
+    "SERIAL2": int16,
+    "SMALLINT": int16,
+    "SMALLSERIAL": int16,
 }
 
 
-def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[str, Field]:
+def create_cache_config(
+    table_format_json: dict[str, ConfigDefinition]
+) -> dict[str, Field]:
     """Converts the Gene Pool table format to a GPC config.
 
     | Field | Type | Default | Description |
@@ -157,35 +185,52 @@ def create_cache_config(table_format_json: dict[str, ConfigDefinition]) -> dict[
     # specifics. Monitor the unique hash to entry ratio to make sure it is worth it.
     fields: dict[str, Field] = {}
     for column, definition in table_format_json.items():
-        match: Match[str] | None = search(_REGEX, definition['type'])
-        assert match is not None, f"definition['type'] = {definition['type']} which cannot be parsed!"
-        typ: str = 'LIST'
-        if match is not None and '[]' not in definition['type']:
+        match: Match[str] | None = search(_REGEX, definition["type"])
+        assert (
+            match is not None
+        ), f"definition['type'] = {definition['type']} which cannot be parsed!"
+        typ: str = "LIST"
+        if match is not None and "[]" not in definition["type"]:
             typ = match.group(1)
         length: int = 1 if not match.group(2) else int(match.group(2))
-        default: str | int = 0 if definition.get('default', 'null') == 'null' else definition.get('default', 0)
+        default: str | int = (
+            0
+            if definition.get("default", "null") == "null"
+            else definition.get("default", 0)
+        )
         fields[column] = {
-            'type': sql_np_mapping.get(typ, list) if not definition.get('indexed', False) else indexed_store,
-            'length': length,
-            'default': sql_np_mapping[typ](default) if typ in sql_np_mapping else None,
-            'read_only': not definition.get('volatile', False),
-            'read_count': 0,
-            'write_count': 0
+            "type": sql_np_mapping.get(typ, list)
+            if not definition.get("indexed", False)
+            else indexed_store,
+            "length": length,
+            "default": sql_np_mapping[typ](default) if typ in sql_np_mapping else None,
+            "read_only": not definition.get("volatile", False),
+            "read_count": 0,
+            "write_count": 0,
         }
     return fields
 
 
 class gene_pool_cache(gene_pool_cache_graph):
     """The Gene Pool Cache (GPC)."""
+
     # TODO: Implement bulk get, set & del methods
 
     def __init__(self, delta_size: int = 17) -> None:
         super().__init__()
-        fields: dict[str, ConfigDefinition] = {k: v for k, v in filter(_GGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())}
-        self._ggc_cache: packed_store = packed_store(create_cache_config(fields), xGC, delta_size)
+        fields: dict[str, ConfigDefinition] = {
+            k: v for k, v in filter(_GGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())
+        }
+        self._ggc_cache: packed_store = packed_store(
+            create_cache_config(fields), xGC, delta_size
+        )
         self._ggc_refs: dict[int, int] = self._ggc_cache.ref_to_idx
-        fields: dict[str, ConfigDefinition] = {k: v for k, v in filter(_PGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())}
-        self._pgc_cache: packed_store = packed_store(create_cache_config(fields), xGC, delta_size)
+        fields: dict[str, ConfigDefinition] = {
+            k: v for k, v in filter(_PGC_INIT_LAMBDA, GPC_TABLE_SCHEMA.items())
+        }
+        self._pgc_cache: packed_store = packed_store(
+            create_cache_config(fields), xGC, delta_size
+        )
         self._pgc_refs: dict[int, int] = self._pgc_cache.ref_to_idx
 
     def __contains__(self, ref: int) -> bool:
@@ -240,7 +285,7 @@ class gene_pool_cache(gene_pool_cache_graph):
         Args
         ----
         ref: GPC unique GC reference.
-        default: Return if ref not in the GPC. 
+        default: Return if ref not in the GPC.
 
         Returns
         -------
@@ -280,7 +325,9 @@ class gene_pool_cache(gene_pool_cache_graph):
         """Make sure we do not copy GPC."""
         assert False, "Deep copy of the GPC."
 
-    def get_list(self, refs: list[int] | tuple[int, ...] | Generator[int, None, None]) -> list[xGC]:
+    def get_list(
+        self, refs: list[int] | tuple[int, ...] | Generator[int, None, None]
+    ) -> list[xGC]:
         """Return a list of xGCs from the GPC.
 
         Args
@@ -291,9 +338,14 @@ class gene_pool_cache(gene_pool_cache_graph):
         -------
         A list of xGCs.
         """
-        return [self._ggc_cache[ref] if ref in self._ggc_refs else self._pgc_cache[ref] for ref in refs]
+        return [
+            self._ggc_cache[ref] if ref in self._ggc_refs else self._pgc_cache[ref]
+            for ref in refs
+        ]
 
-    def find(self, field: str, value: Any, ggc_only: bool = True) -> Generator[xGC, None, None]:
+    def find(
+        self, field: str, value: Any, ggc_only: bool = True
+    ) -> Generator[xGC, None, None]:
         """Find all GC's with a field matching value.
 
         Args
@@ -330,20 +382,25 @@ class gene_pool_cache(gene_pool_cache_graph):
 
     def random_pgc(self, depth: int = 0) -> pGC:
         """A weighted random pGC from the GPC."""
-        ref_allocs, fitness_allocs =  self._pgc_cache.get_allocation(('ref', 'pgc_fitness'))
+        ref_allocs, fitness_allocs = self._pgc_cache.get_allocation(
+            ("ref", "pgc_fitness")
+        )
         allocation_sums = [fitness[depth].sum() for fitness in fitness_allocs]
 
         # No pGC's with non-zero fitness (i.e. all pGC's a unused codons)
         total_weight = sum(allocation_sums)
         if total_weight == 0:
             return self._pgc_cache[choice(tuple(self._pgc_refs.keys()))]
-        
+
         # Weighted random selection of allocation
-        allocation_idx = np_choice(tuple(range(len(allocation_sums))), p=[x / total_weight for x in allocation_sums])
+        allocation_idx = np_choice(
+            tuple(range(len(allocation_sums))),
+            p=[x / total_weight for x in allocation_sums],
+        )
         refs = ref_allocs[allocation_idx]
         f: double = fitness_allocs[allocation_idx][depth]
         return self._pgc_cache[refs[np_choice(tuple(range(len(refs))), p=f / f.sum())]]
-    
+
     def items(self) -> Generator[tuple[int, xGC], None, None]:
         """A view of the gGCs in the GPC."""
         for ref in self._ggc_refs:

@@ -8,9 +8,15 @@ from pprint import pformat
 from typing import Any, Callable, Iterable, Literal, LiteralString
 from functools import lru_cache
 
-from egp_types.conversions import (compress_json, decompress_json,
-                                   encode_properties, memoryview_to_bytes,
-                                   str_to_datetime, str_to_sha256, str_to_uuid)
+from egp_types.conversions import (
+    compress_json,
+    decompress_json,
+    encode_properties,
+    memoryview_to_bytes,
+    str_to_datetime,
+    str_to_sha256,
+    str_to_uuid,
+)
 from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge
 from egp_utils.text_token import register_token_code, text_token
@@ -18,77 +24,103 @@ from pypgtable import table
 from pypgtable.validators import raw_table_config_validator
 from pypgtable.typing import RowIter, TableConfig, TableConfigNorm
 
-from .genetic_material_store import (GMS_RAW_TABLE_SCHEMA, UPDATE_STR,
-                                     genetic_material_store)
+from .genetic_material_store import (
+    GMS_RAW_TABLE_SCHEMA,
+    UPDATE_STR,
+    genetic_material_store,
+)
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
 _NULL_GC_DATA: dict[str, int | bool] = {
-    'code_depth': 0,
-    'num_codes': 0,
-    'raw_num_codons': 1,
-    'generation': 0,
-    'properties': 0,
-    '_stored': True
+    "code_depth": 0,
+    "num_codes": 0,
+    "raw_num_codons": 1,
+    "generation": 0,
+    "properties": 0,
+    "_stored": True,
 }
-DATA_FILE_FOLDER: str = join(dirname(__file__), 'data')
-_DATA_FILES: list[str] = [join(DATA_FILE_FOLDER, data_file) for data_file in ('codons.json', 'mutations.json')]
+DATA_FILE_FOLDER: str = join(dirname(__file__), "data")
+_DATA_FILES: list[str] = [
+    join(DATA_FILE_FOLDER, data_file) for data_file in ("codons.json", "mutations.json")
+]
 
 
 # Tree structure
-_LEL: Literal['gca'] = 'gca'
-_REL: Literal['gcb'] = 'gcb'
-_NL: Literal['signature'] = 'signature'
-_PTR_MAP: dict[str, str] = {
-    _LEL: _NL,
-    _REL: _NL
-}
+_LEL: Literal["gca"] = "gca"
+_REL: Literal["gcb"] = "gcb"
+_NL: Literal["signature"] = "signature"
+_PTR_MAP: dict[str, str] = {_LEL: _NL, _REL: _NL}
 
 
 register_token_code("I03000", "Adding data to table {table} from {file}.")
 register_token_code("I03001", "Library validation cache performance: {cache_info}.")
-register_token_code('E03000', 'Query is not valid: {errors}: {query}')
-register_token_code('E03001', 'Entry is not valid: {errors}: {entry}')
-register_token_code('E03002', 'Referenced GC(s) {references} do not exist. Entry:\n{entry}:')
-register_token_code('F03000', 'Genomic library is inconsistent. Referenced GC(s) {references} do not exist. Entry:\n{entry}:')
+register_token_code("E03000", "Query is not valid: {errors}: {query}")
+register_token_code("E03001", "Entry is not valid: {errors}: {entry}")
+register_token_code(
+    "E03002", "Referenced GC(s) {references} do not exist. Entry:\n{entry}:"
+)
+register_token_code(
+    "F03000",
+    "Genomic library is inconsistent. Referenced GC(s) {references} do not exist. Entry:\n{entry}:",
+)
 
 
 GL_RAW_TABLE_SCHEMA: dict[str, Any] = deepcopy(GMS_RAW_TABLE_SCHEMA)
-with open(join(dirname(__file__), "formats/gl_table_format.json"), "r", encoding="utf-8") as _file_ptr:
+with open(
+    join(dirname(__file__), "formats/gl_table_format.json"), "r", encoding="utf-8"
+) as _file_ptr:
     merge(GL_RAW_TABLE_SCHEMA, load(_file_ptr))
-GL_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == '_', GL_RAW_TABLE_SCHEMA)))
-GL_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GL_HIGHER_LAYER_COLS)) + ('updated', 'created', 'signature')
-GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple(key for key, _ in filter(
-    lambda x: x[1].get('signature', False), GL_RAW_TABLE_SCHEMA.items()))
-GL_REFERENCE_COLUMNS: tuple[str, ...] = tuple(key for key, _ in filter(
-    lambda x: x[1].get('signature', False) and 'ancestor' not in x[0], GL_RAW_TABLE_SCHEMA.items()))
+GL_HIGHER_LAYER_COLS: tuple[str, ...] = tuple(
+    (key for key in filter(lambda x: x[0] == "_", GL_RAW_TABLE_SCHEMA))
+)
+GL_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple(
+    (x[1:] for x in GL_HIGHER_LAYER_COLS)
+) + ("updated", "created", "signature")
+GL_SIGNATURE_COLUMNS: tuple[str, ...] = tuple(
+    key
+    for key, _ in filter(
+        lambda x: x[1].get("signature", False), GL_RAW_TABLE_SCHEMA.items()
+    )
+)
+GL_REFERENCE_COLUMNS: tuple[str, ...] = tuple(
+    key
+    for key, _ in filter(
+        lambda x: x[1].get("signature", False) and "ancestor" not in x[0],
+        GL_RAW_TABLE_SCHEMA.items(),
+    )
+)
 
-_CONVERSIONS: tuple[tuple[LiteralString, Callable[..., Any] | None, Callable[..., Any] | None], ...] = (
-    ('graph', compress_json, decompress_json),
-    ('meta_data', compress_json, decompress_json),
-    ('inputs', None, memoryview_to_bytes),
-    ('outputs', None, memoryview_to_bytes),
-    ('creator', str_to_uuid, None),
-    ('created', str_to_datetime, None),
-    ('updated', str_to_datetime, None),
-    ('properties', encode_properties, None)
-) + tuple((key, str_to_sha256, memoryview_to_bytes) for key in GL_SIGNATURE_COLUMNS)
+_CONVERSIONS: tuple[
+    tuple[LiteralString, Callable[..., Any] | None, Callable[..., Any] | None], ...
+] = (
+    ("graph", compress_json, decompress_json),
+    ("meta_data", compress_json, decompress_json),
+    ("inputs", None, memoryview_to_bytes),
+    ("outputs", None, memoryview_to_bytes),
+    ("creator", str_to_uuid, None),
+    ("created", str_to_datetime, None),
+    ("updated", str_to_datetime, None),
+    ("properties", encode_properties, None),
+) + tuple(
+    (key, str_to_sha256, memoryview_to_bytes) for key in GL_SIGNATURE_COLUMNS
+)
 
 
 # The default config
-_DEFAULT_CONFIG: TableConfigNorm = raw_table_config_validator.normalized({
-    'database': {
-        'dbname': 'erasmus_db'
-    },
-    'table': 'genomic_library',
-    'ptr_map': _PTR_MAP,
-    'schema': GL_RAW_TABLE_SCHEMA,
-    'create_table': True,
-    'create_db': True,
-    'conversions': _CONVERSIONS
-})
+_DEFAULT_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
+    {
+        "database": {"dbname": "erasmus_db"},
+        "table": "genomic_library",
+        "ptr_map": _PTR_MAP,
+        "schema": GL_RAW_TABLE_SCHEMA,
+        "create_table": True,
+        "create_db": True,
+        "conversions": _CONVERSIONS,
+    }
+)
 
 
 def default_config() -> TableConfigNorm:
@@ -109,7 +141,9 @@ def gl_sql_functions() -> str:
     SQL functions are used to update genetic code entries as they are an easy way to guarantee
     atomic behaviour.
     """
-    with open(join(dirname(__file__), 'data/gl_functions.sql'), 'r', encoding='utf-8') as fileptr:
+    with open(
+        join(dirname(__file__), "data/gl_functions.sql"), "r", encoding="utf-8"
+    ) as fileptr:
         return fileptr.read()
 
 
@@ -125,7 +159,11 @@ class genomic_library(genetic_material_store):
     that is not in the genomic library.
     """
 
-    def __init__(self, config: TableConfig | TableConfigNorm = _DEFAULT_CONFIG, data_files: list[str] = _DATA_FILES) -> None:
+    def __init__(
+        self,
+        config: TableConfig | TableConfigNorm = _DEFAULT_CONFIG,
+        data_files: list[str] = _DATA_FILES,
+    ) -> None:
         """Connect to or create a genomic library.
 
         The genomic library data persists in a postgresql database. Multiple
@@ -138,20 +176,36 @@ class genomic_library(genetic_material_store):
         """
         super().__init__()
         self.library: table = table(config)
-        self._update_str: str = UPDATE_STR.replace('__table__', config['table'])
+        self._update_str: str = UPDATE_STR.replace("__table__", config["table"])
         self.encode_value: Callable[..., Any] = self.library.encode_value
         self.select: Callable[..., RowIter] = self.library.select
         self.recursive_select: Callable[..., RowIter] = self.library.recursive_select
         if self.library.raw.creator:
             self.library.raw.arbitrary_sql(gl_sql_functions(), read=False)
             for data_file in data_files:
-                _logger.info(text_token({'I03000': {'table': self.library.raw.config['table'], 'file': data_file}}))
-                with open(data_file, "r", encoding='utf-8') as file_ptr:
-                    self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
+                _logger.info(
+                    text_token(
+                        {
+                            "I03000": {
+                                "table": self.library.raw.config["table"],
+                                "file": data_file,
+                            }
+                        }
+                    )
+                )
+                with open(data_file, "r", encoding="utf-8") as file_ptr:
+                    self.library.insert(
+                        (
+                            LGC_json_load_entry_validator.normalized(entry)
+                            for entry in load(file_ptr)
+                        )
+                    )
 
     def __getitem__(self, signature: bytes) -> tuple[dict[str, Any], ...]:
         """Recursively pull a genetic code from the genomic library."""
-        entry = tuple(self.recursive_select('WHERE {signature} = {sig}', {'sig': signature}))
+        entry = tuple(
+            self.recursive_select("WHERE {signature} = {sig}", {"sig": signature})
+        )
         if entry:
             return entry
         raise KeyError
@@ -159,9 +213,20 @@ class genomic_library(genetic_material_store):
     @lru_cache(maxsize=10000)
     def signature_exists(self, signature: bytes) -> bool:
         """Check if a signature exists in the genomic library."""
-        return bool(tuple(self.library.select('WHERE {signature} = {sig}', {'sig': signature}, ('signature',), 'tuple')))
+        return bool(
+            tuple(
+                self.library.select(
+                    "WHERE {signature} = {sig}",
+                    {"sig": signature},
+                    ("signature",),
+                    "tuple",
+                )
+            )
+        )
 
-    def _check_references(self, references: Iterable[bytes], check_list: set[bytes] | None = None) -> list[bytes]:
+    def _check_references(
+        self, references: Iterable[bytes], check_list: set[bytes] | None = None
+    ) -> list[bytes]:
         """Verify all the references exist in the genomic library.
 
         Genetic codes reference each other. A debugging check is to verify the
@@ -186,7 +251,9 @@ class genomic_library(genetic_material_store):
                 check_list.add(reference)
         return naughty_list
 
-    def _calculate_fields(self, entry: dict[str, Any], entries: dict[bytes, dict[str, Any]]) -> None:
+    def _calculate_fields(
+        self, entry: dict[str, Any], entries: dict[bytes, dict[str, Any]]
+    ) -> None:
         """Calculate the derived genetic code fields.
 
         Cerberus normalisation can only set fields based on the contents of the genetic code dictionary.
@@ -204,34 +271,40 @@ class genomic_library(genetic_material_store):
         # TODO: Need to update references.
         # TODO: Check consistency for GC's that are already stored.
         gca: dict[str, int | bool] = _NULL_GC_DATA
-        if not entry['gca'] is None:
-            if entry['gca'] not in entries.keys():
-                if not self.library[entry['gca']]:
-                    _logger.error(f'entry["gca"] = {entry["gca"]} does not exist in the list to be stored or genomic library!')
-                    _logger.error(f'Entries signature list: {entries.keys()}')
+        if not entry["gca"] is None:
+            if entry["gca"] not in entries.keys():
+                if not self.library[entry["gca"]]:
+                    _logger.error(
+                        f'entry["gca"] = {entry["gca"]} does not exist in the list to be stored or genomic library!'
+                    )
+                    _logger.error(f"Entries signature list: {entries.keys()}")
             else:
-                gca = entries[entry['gca']]
-                if not gca['_calculated']:
+                gca = entries[entry["gca"]]
+                if not gca["_calculated"]:
                     self._calculate_fields(gca, entries)
 
         gcb: dict[str, int | bool] = _NULL_GC_DATA
-        if not entry['gcb'] is None:
-            if entry['gcb'] not in entries.keys():
-                if not self.library[entry['gcb']]:
-                    _logger.error(f'entry["gcb"] = {entry["gcb"]} does not exist in the list to be stored or genomic library!')
-                    _logger.error(f'Entries signature list: {entries.keys()}')
+        if not entry["gcb"] is None:
+            if entry["gcb"] not in entries.keys():
+                if not self.library[entry["gcb"]]:
+                    _logger.error(
+                        f'entry["gcb"] = {entry["gcb"]} does not exist in the list to be stored or genomic library!'
+                    )
+                    _logger.error(f"Entries signature list: {entries.keys()}")
             else:
-                gcb = entries[entry['gca']]
-                if not gcb['_calculated']:
+                gcb = entries[entry["gca"]]
+                if not gcb["_calculated"]:
                     self._calculate_fields(gca, entries)
 
-        if not (entry['gca'] is None and entry['gcb'] is None):
-            entry['code_depth'] = max((gca['code_depth'], gcb['code_depth'])) + 1
-            entry['num_codes'] = gca['num_codes'] + gcb['num_codes']
-            entry['raw_num_codons'] = gca['raw_num_codons'] + gcb['raw_num_codons']
-            entry['generation'] = max((gca['generation'] + 1, gcb['generation'] + 1, entry['generation']))
-            entry['properties'] = gca['properties'] | gcb['properties']
-        entry['_calculated'] = True
+        if not (entry["gca"] is None and entry["gcb"] is None):
+            entry["code_depth"] = max((gca["code_depth"], gcb["code_depth"])) + 1
+            entry["num_codes"] = gca["num_codes"] + gcb["num_codes"]
+            entry["raw_num_codons"] = gca["raw_num_codons"] + gcb["raw_num_codons"]
+            entry["generation"] = max(
+                (gca["generation"] + 1, gcb["generation"] + 1, entry["generation"])
+            )
+            entry["properties"] = gca["properties"] | gcb["properties"]
+        entry["_calculated"] = True
 
     def _normalize(self, entries: dict[bytes, dict[str, Any]]) -> None:
         """Normalize entries before storing. The entries are modified in place.
@@ -247,38 +320,87 @@ class genomic_library(genetic_material_store):
         _logger.debug(f"Normalizing {len(entries)} entries.")
         for signature, entry in entries.items():
             entries[signature] = LGC_json_load_entry_validator.normalized(entry)
-            entries[signature]['_calculated'] = False
+            entries[signature]["_calculated"] = False
         for entry in entries.values():
             self._calculate_fields(entry, entries)
 
         _logger.debug("Validating normalised entries before storing.")
         check_list: set[bytes] = set(entries.keys())
         for entry in entries.values():
-            del entry['_calculated']
+            del entry["_calculated"]
             if not LGC_json_load_entry_validator.validate(entry):
                 _logger.error(
-                    str(text_token({'E03001': {'errors': LGC_json_load_entry_validator.error_str(),
-                        'entry': pformat(entry, width=180)}})))
-                raise ValueError('Genomic library entry invalid.')
-            references: tuple[bytes, ...] = tuple(entry[ref_col] for ref_col in GL_REFERENCE_COLUMNS if entry[ref_col] is not None)
-            problem_references: list[bytes] = self._check_references(references, check_list)
+                    str(
+                        text_token(
+                            {
+                                "E03001": {
+                                    "errors": LGC_json_load_entry_validator.error_str(),
+                                    "entry": pformat(entry, width=180),
+                                }
+                            }
+                        )
+                    )
+                )
+                raise ValueError("Genomic library entry invalid.")
+            references: tuple[bytes, ...] = tuple(
+                entry[ref_col]
+                for ref_col in GL_REFERENCE_COLUMNS
+                if entry[ref_col] is not None
+            )
+            problem_references: list[bytes] = self._check_references(
+                references, check_list
+            )
             if problem_references:
-                _logger.error(str(text_token({'E03002': {'entry': pformat(entry, width=180), 'references': problem_references}})))
-                raise ValueError('Genomic library entry invalid.')
+                _logger.error(
+                    str(
+                        text_token(
+                            {
+                                "E03002": {
+                                    "entry": pformat(entry, width=180),
+                                    "references": problem_references,
+                                }
+                            }
+                        )
+                    )
+                )
+                raise ValueError("Genomic library entry invalid.")
 
     def validate(self) -> bool:
         """Check the GL for self consistency.
-        
+
         Iterate through all genetic codes validating the references exist.
         """
-        for entry in self.library.select(container='tuple', columns=GL_REFERENCE_COLUMNS):
-            references: tuple[bytes, ...] = tuple(sig for sig in entry if sig is not None)
+        for entry in self.library.select(
+            container="tuple", columns=GL_REFERENCE_COLUMNS
+        ):
+            references: tuple[bytes, ...] = tuple(
+                sig for sig in entry if sig is not None
+            )
             problem_references: tuple[bytes] = self._check_references(references)
             if problem_references:
-                full_entry = self.library[references[GL_REFERENCE_COLUMNS.index('signature')]] 
-                _logger.error(str(text_token({'F03000': {'entry': pformat(full_entry, width=180), 'references': problem_references}})))
+                full_entry = self.library[
+                    references[GL_REFERENCE_COLUMNS.index("signature")]
+                ]
+                _logger.error(
+                    str(
+                        text_token(
+                            {
+                                "F03000": {
+                                    "entry": pformat(full_entry, width=180),
+                                    "references": problem_references,
+                                }
+                            }
+                        )
+                    )
+                )
                 return False
-        _logger.info(str(text_token({'I03001': {'cache_info': self.signature_exists.cache_info()}})))  # pylint: disable=no-value-for-parameter
+        _logger.info(
+            str(
+                text_token(
+                    {"I03001": {"cache_info": self.signature_exists.cache_info()}}
+                )
+            )
+        )  # pylint: disable=no-value-for-parameter
         self.signature_exists.cache_clear()
         return True
 
@@ -294,7 +416,9 @@ class genomic_library(genetic_material_store):
             entries. Values will be normalised & updated in place
         """
         self._normalize(entries)
-        updated_entries: RowIter = self.library.upsert(entries.values(), self._update_str, {}, GL_UPDATE_RETURNING_COLS)
+        updated_entries: RowIter = self.library.upsert(
+            entries.values(), self._update_str, {}, GL_UPDATE_RETURNING_COLS
+        )
         for updated_entry in updated_entries:
-            entry: dict[str, Any] = entries[updated_entry['signature']]
+            entry: dict[str, Any] = entries[updated_entry["signature"]]
             entry.update(updated_entry)
