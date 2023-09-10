@@ -10,7 +10,7 @@ from egp_population.population_config import (
     population_table_config,
 )
 from pypgtable import table
-from pypgtable.typing import TableConfigNorm
+from pypgtable.pypgtable_typing import TableConfigNorm
 
 from egp_stores.egp_typing import GenePoolConfigNorm
 from egp_stores.gene_pool import default_config as gp_default_config

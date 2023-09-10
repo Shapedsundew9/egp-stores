@@ -5,7 +5,7 @@ from typing import Any
 from os.path import dirname, join
 
 from egp_types.conversions import sha256_to_str
-from pypgtable.typing import RowIter
+from pypgtable.pypgtable_typing import RowIter
 
 from egp_stores import default_config, genomic_library
 

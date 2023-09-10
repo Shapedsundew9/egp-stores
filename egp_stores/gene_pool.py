@@ -16,7 +16,7 @@ from egp_types.xgc_validator import gGC_entry_validator
 from egp_utils.common import merge
 from egp_population.egp_typing import PopulationConfigNorm
 from pypgtable import table
-from pypgtable.typing import Conversions, PtrMap, TableConfigNorm, TableSchema
+from pypgtable.pypgtable_typing import Conversions, PtrMap, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
 
 from .gene_pool_cache import (

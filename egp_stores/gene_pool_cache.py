@@ -65,7 +65,7 @@ from egp_utils.common import merge
 from egp_utils.packed_store import Field, indexed_store, packed_store
 from numpy import bool_, double, float32, int16, int32, int64
 from numpy.random import choice as np_choice
-from pypgtable.typing import SchemaColumn
+from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
 from .gene_pool_cache_graph import gene_pool_cache_graph

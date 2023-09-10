@@ -5,24 +5,21 @@ from json import load
 from logging import Logger, NullHandler, getLogger
 from os.path import dirname, join
 from pprint import pformat
-from typing import Any, Callable, Iterable, Literal, LiteralString
+from typing import Any, Callable, Iterable, Literal
 from functools import lru_cache
 
 from egp_types.conversions import (
     compress_json,
     decompress_json,
     encode_properties,
-    memoryview_to_bytes,
-    str_to_datetime,
-    str_to_sha256,
-    str_to_uuid,
+    memoryview_to_bytes
 )
 from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge
-from egp_utils.text_token import register_token_code, text_token
+from text_token import register_token_code, text_token
 from pypgtable import table
 from pypgtable.validators import raw_table_config_validator
-from pypgtable.typing import RowIter, TableConfig, TableConfigNorm
+from pypgtable.pypgtable_typing import RowIter, TableConfig, TableConfigNorm
 
 from .genetic_material_store import (
     GMS_RAW_TABLE_SCHEMA,
@@ -94,18 +91,15 @@ GL_REFERENCE_COLUMNS: tuple[str, ...] = tuple(
 )
 
 _CONVERSIONS: tuple[
-    tuple[LiteralString, Callable[..., Any] | None, Callable[..., Any] | None], ...
+    tuple[str, Callable | None, Callable | None], ...
 ] = (
     ("graph", compress_json, decompress_json),
     ("meta_data", compress_json, decompress_json),
     ("inputs", None, memoryview_to_bytes),
     ("outputs", None, memoryview_to_bytes),
-    ("creator", str_to_uuid, None),
-    ("created", str_to_datetime, None),
-    ("updated", str_to_datetime, None),
     ("properties", encode_properties, None),
 ) + tuple(
-    (key, str_to_sha256, memoryview_to_bytes) for key in GL_SIGNATURE_COLUMNS
+    (key, None, memoryview_to_bytes) for key in GL_SIGNATURE_COLUMNS
 )
 
 
@@ -376,7 +370,7 @@ class genomic_library(genetic_material_store):
             references: tuple[bytes, ...] = tuple(
                 sig for sig in entry if sig is not None
             )
-            problem_references: tuple[bytes] = self._check_references(references)
+            problem_references: list[bytes] = self._check_references(references)
             if problem_references:
                 full_entry = self.library[
                     references[GL_REFERENCE_COLUMNS.index("signature")]
@@ -397,7 +391,7 @@ class genomic_library(genetic_material_store):
         _logger.info(
             str(
                 text_token(
-                    {"I03001": {"cache_info": self.signature_exists.cache_info()}}
+                    {"I03001": {"cache_info": self.signature_exists.cache_info()}}  ## pylint: disable=no-value-for-parameter
                 )
             )
         )  # pylint: disable=no-value-for-parameter
