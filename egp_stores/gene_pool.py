@@ -13,7 +13,8 @@ from egp_types.gc_graph import gc_graph
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, isGLGC
 from egp_types.xgc_validator import gGC_entry_validator
-from egp_utils.common import merge
+from egp_types.eGC import set_reference_generator
+from egp_utils.common import merge, default_erasumus_db_config
 from egp_population.egp_typing import PopulationConfigNorm
 from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, PtrMap, TableConfigNorm, TableSchema
@@ -77,7 +78,7 @@ _PTR_MAP_PLUS_PGC: PtrMap = {_LEL: _NL, _REL: _NL, _PEL: _NL}
 # If GPSPUID + 1 overflows 32 signed bits set it to max positive (leave it unchanged)
 # A GPSPUID of 2**31 - 1 is a signal to the subprocess to tell the worker we are out of
 # Gene Pool Sub-Process UID's.
-_GPSPUID_UPDATE_SQL: str = "{gpspuid} = COALESE(NULLIF({gpspuid} + 1:BIGINT, x'80000000::BIGINT), x'7FFFFFFF::BIGINT')"
+_GPSPUID_UPDATE_SQL: str = "{next_GPSPUID} = COALESCE(NULLIF({next_GPSPUID} + 1::BIGINT, x'80000000'::BIGINT), x'7FFFFFFF'::BIGINT)"
 
 with open(
     join(dirname(__file__), "formats/gp_metrics_table_format.json"),
@@ -125,7 +126,7 @@ _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0
 # The gene pool default config
 _DEFAULT_GP_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
     {
-        "database": {"dbname": "erasmus_db"},
+        "database": default_erasumus_db_config(),
         "table": "gene_pool",
         "ptr_map": _PTR_MAP,
         "schema": GP_RAW_TABLE_SCHEMA,
@@ -136,7 +137,7 @@ _DEFAULT_GP_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
 )
 _DEFAULT_GP_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
     {
-        "database": {"dbname": "erasmus_db"},
+        "database": default_erasumus_db_config(),
         "table": "gp_metrics",
         "schema": _GP_METRICS_TABLE_SCHEMA,
         "create_table": False,
@@ -145,7 +146,7 @@ _DEFAULT_GP_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normali
 )
 _DEFAULT_PGC_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
     {
-        "database": {"dbname": "erasmus_db"},
+        "database": default_erasumus_db_config(),
         "table": "pgc_metrics",
         "schema": _GP_PGC_METRICS_TABLE_SCHEMA,
         "create_table": False,
@@ -154,7 +155,7 @@ _DEFAULT_PGC_METRICS_CONFIG: TableConfigNorm = raw_table_config_validator.normal
 )
 _DEFAULT_GP_META_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
     {
-        "database": {"dbname": "erasmus_db"},
+        "database": default_erasumus_db_config(),
         "table": "meta_data",
         "schema": _GP_META_TABLE_SCHEMA,
         "create_table": False,
@@ -255,18 +256,22 @@ class gene_pool(genetic_material_store):
         self._pool: table = table(self.config["gene_pool"])
         _logger.info("Established connection to Gene Pool table.")
         if self._pool.raw.creator:
-            # The Gene Pool uses the same GC update functions as the Genomic Library
+            # If this instance created the gene pool then it is responsible for configuring
+            # setting up database functions and initial population.
             self._pool.raw.arbitrary_sql(gl_sql_functions(), read=False)
             self._pool.raw.arbitrary_sql(gp_sql_functions(), read=False)
-
             # Enable creation of the other GP tables
             for table_config in self.config.values():
                 if "create_table" in table_config:
                     table_config["create_table"] = True
 
+        self._tables: dict[str, table] = {"meta_data": table(self.config["meta_data"])}
+        if self._tables["meta_data"].raw.creator:
+            self._tables["meta_data"].raw.arbitrary_sql('INSERT INTO "meta_data" DEFAULT VALUES;', read=False)
+
         # If this process did not create the gene pool table the following line will wait
         # for the other tables to be created.
-        self._tables: dict[str, table] = {k: table(v) for k, v in self.config.items()}
+        self._tables.update({k: table(v) for k, v in self.config.items()})
         _logger.info("Established connections to gene pool tables.")
         self.select = self._tables["gene_pool"].select
 
@@ -274,12 +279,6 @@ class gene_pool(genetic_material_store):
         self._update_str: str = UPDATE_STR.replace(
             "__table__", self.config["gene_pool"]["table"]
         )
-
-        # If this instance created the gene pool then it is responsible for configuring
-        # setting up database functions and initial population.
-        if self._pool.raw.creator:
-            # FIXME: How are other workers held back until this is executed?
-            self._pool.raw.arbitrary_sql(gl_sql_functions(), read=False)
 
         self.gpspuid: int = -1
         self.next_reference: Callable[[], int] = lambda: 0
@@ -296,6 +295,7 @@ class gene_pool(genetic_material_store):
         )[0]
         assert self.gpspuid < 0x7FFFFFFF, "GPSPUID out of range!"
         self.next_reference = partial(reference, gpspuid=self.gpspuid, counter=count())
+        set_reference_generator(self.next_reference)
 
         # GPC needs to know which process it is being used in so it can identify GC's created by this process.
         self.pool.from_higher_layer = (
@@ -318,6 +318,7 @@ class gene_pool(genetic_material_store):
         4. Pull in the best pGC's at each layer.
         5. If not enough quality population pull from higher layer or create eGC's.
         """
+        _logger.info("Populating local cache from Gene Pool.")
         self.pull(
             list(
                 self.glib.select(

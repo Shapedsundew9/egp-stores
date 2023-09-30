@@ -15,7 +15,7 @@ from egp_types.conversions import (
     memoryview_to_bytes
 )
 from egp_types.xgc_validator import LGC_json_load_entry_validator
-from egp_utils.common import merge
+from egp_utils.common import merge, default_erasumus_db_config
 from text_token import register_token_code, text_token
 from pypgtable import table
 from pypgtable.validators import raw_table_config_validator
@@ -106,7 +106,7 @@ _CONVERSIONS: tuple[
 # The default config
 _DEFAULT_CONFIG: TableConfigNorm = raw_table_config_validator.normalized(
     {
-        "database": {"dbname": "erasmus_db"},
+        "database": default_erasumus_db_config(),
         "table": "genomic_library",
         "ptr_map": _PTR_MAP,
         "schema": GL_RAW_TABLE_SCHEMA,
