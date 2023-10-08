@@ -121,6 +121,7 @@ _LOAD_PGC_SQL: str = (
     "ORDER BY {pgc_fitness}[{layer}] DESC LIMIT {limit}"
 )
 _LOAD_CODONS_SQL: str = "WHERE {creator}::text = '22c23596-df90-4b87-88a4-9409a0ea764f'"
+_META_DEFAULTS_SQL = "INSERT INTO {mdt} DEFAULT VALUES;"
 
 
 # The gene pool default config
@@ -244,6 +245,7 @@ class gene_pool(genetic_material_store):
                 v,
                 raw_table_config_validator.normalized(config.get(k, {})),
                 no_new_keys=True,
+                update=True
             )
 
         self.config: GenePoolConfigNorm = {k: normalize(k, v) for k, v in _DEFAULT_CONFIGS.items()}  # type: ignore
@@ -267,7 +269,8 @@ class gene_pool(genetic_material_store):
 
         self._tables: dict[str, table] = {"meta_data": table(self.config["meta_data"])}
         if self._tables["meta_data"].raw.creator:
-            self._tables["meta_data"].raw.arbitrary_sql('INSERT INTO "meta_data" DEFAULT VALUES;', read=False)
+            literals: dict[str, Any] = {"mdt": self._tables["meta_data"].raw.config["table"]}
+            self._tables["meta_data"].raw.arbitrary_sql(_META_DEFAULTS_SQL.format(**literals), literals=literals, read=False)
 
         # If this process did not create the gene pool table the following line will wait
         # for the other tables to be created.
