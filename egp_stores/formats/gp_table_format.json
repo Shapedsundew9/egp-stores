@@ -1,52 +1,52 @@
 {
     "ancestor_a_ref": {
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "ancestor_b_ref": {
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "f_count": {
+        "ggc_only": true,
         "nullable": true,
         "type": "INTEGER",
-        "volatile": true,
-        "ggc_only": true
+        "volatile": true
     },
     "fitness": {
+        "ggc_only": true,
         "nullable": true,
         "type": "REAL",
-        "volatile": true,
-        "ggc_only": true
+        "volatile": true
     },
     "gca_ref": {
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "gcb_ref": {
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "igraph": {
-        "type": "BYTEA",
-        "nullable": true
+        "nullable": true,
+        "type": "BYTEA"
     },
     "lc": {
-        "nullable": true,
-        "type": "SMALLINT",
         "description": "The line count of the callable.",
-        "init_only": true
+        "init_only": true,
+        "nullable": true,
+        "type": "SMALLINT"
     },
     "next_pgc_ref": {
         "description": "An intergenerational pGC can specify the next pGC to operate on this GC with this field.",
         "nullable": true,
+        "reference": true,
         "type": "BIGINT",
-        "volatile": true,
-        "reference": true
+        "volatile": true
     },
     "offspring_count": {
         "default": "0",
@@ -56,30 +56,30 @@
     "pgc_ref": {
         "default": "null",
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "population_uid": {
         "description": "TODO: Population will be defined by reference (as class will be).",
+        "ggc_only": true,
         "nullable": true,
-        "type": "SMALLINT",
-        "ggc_only": true
+        "type": "SMALLINT"
     },
     "ref": {
         "primary_key": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "sms_ref": {
         "description": "The SMS this GC was created by if it was net positive for fitness.",
         "nullable": true,
-        "type": "BIGINT",
-        "reference": true
+        "reference": true,
+        "type": "BIGINT"
     },
     "survivability": {
         "default": "0.0",
-        "type": "REAL",
         "ggc_only": true,
+        "type": "REAL",
         "volatile": true
     }
 }

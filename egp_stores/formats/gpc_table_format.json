@@ -1,24 +1,25 @@
 {
+    "active": {
+        "default": "false",
+        "description": "User defined field to mark a GC as active for evolution or not.",
+        "indexed": false,
+        "nullable": false,
+        "volatile": true,
+        "type": "BOOLEAN"
+    },
     "signature": {
+        "default": "null",
         "description": "Only stored for GCs coming from the Genomic Library.",
-        "type": "BYTEA",
         "indexed": true,
         "nullable": true,
-        "default": "null",
-        "signature": true
+        "signature": true,
+        "type": "BYTEA"
     },
     "vertex_idx": {
+        "default": "-1",
         "description": "Vertex index in the GPC Graph.",
-        "type": "INTEGER",
         "indexed": false,
         "nullable": false,
-        "default": "-1"
-    },
-    "active": {
-        "description": "User defined field to mark a GC as active for evolution or not.",
-        "type": "BOOLEAN",
-        "indexed": false,
-        "nullable": false,
-        "default": "false"
+        "type": "INTEGER"
     }
 }

@@ -64,6 +64,7 @@ from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
 from egp_utils.packed_store import Field, indexed_store, packed_store
 from numpy import bool_, double, float32, int16, int32, int64
+from numpy.typing import NDArray
 from numpy.random import choice as np_choice
 from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
@@ -435,3 +436,17 @@ class gene_pool_cache(gene_pool_cache_graph):
             yield ggc
         for pgc in self._pgc_cache.modified(all_fields):
             yield pgc
+
+    def get_population(self, population_uid: int) -> list[xGC]:
+        """Get the individuals with the given population UID."""
+        xgcs: list[xGC] = []
+        for refs, puids in zip(*self._ggc_cache.get_allocation(("ref", "population_uid"))):  # type: ignore
+            xgcs.extend(self[ref] for ref in refs[puids == population_uid])
+        return xgcs
+
+    def get_active_population(self, population_uid: int) -> list[xGC]:
+        """Get the individuals taht are active with the given population UID."""
+        xgcs: list[xGC] = []
+        for refs, puids, active in zip(*self._ggc_cache.get_allocation(("ref", "population_uid", "active"))):  # type: ignore
+            xgcs.extend(self[ref] for ref in refs[(puids == population_uid) & active])
+        return xgcs
