@@ -1,12 +1,12 @@
 """Gene pool management for Erasmus GP."""
-
+from __future__ import annotations
 from copy import deepcopy
 from functools import partial
 from itertools import count
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import Any, Literal, Callable
+from typing import Any, Literal, Callable, TYPE_CHECKING
 
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
 from egp_types.gc_graph import gc_graph
@@ -15,7 +15,6 @@ from egp_types.reference import ref_from_sig, ref_str, reference, get_gpspuid, i
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_types.eGC import set_reference_generator
 from egp_utils.common import merge, default_erasumus_db_config
-from egp_population.egp_typing import PopulationConfigNorm
 from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, PtrMap, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
@@ -41,6 +40,12 @@ from .genomic_library import (
     gl_sql_functions,
 )
 from .egp_typing import GenePoolConfig, GenePoolConfigNorm
+
+
+# For layer violation type definitions.
+if TYPE_CHECKING:
+    from egp_population.egp_typing import PopulationConfigNorm
+
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
