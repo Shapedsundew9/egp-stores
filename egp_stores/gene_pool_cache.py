@@ -264,7 +264,7 @@ class gene_pool_cache(gene_pool_cache_graph):
                 del self._pgc_cache[_ref]
 
     # TODO: Add cache stats to the log output.
-    @lru_cache(maxsize=1024)
+    # @lru_cache(maxsize=1024)
     def __getitem__(self, ref: int) -> xGC:
         """Return an xGC dict-like structure from the GPC.
 
@@ -395,12 +395,12 @@ class gene_pool_cache(gene_pool_cache_graph):
 
         # Weighted random selection of allocation
         allocation_idx = np_choice(
-            tuple(range(len(allocation_sums))),
+            list(range(len(allocation_sums))),
             p=[x / total_weight for x in allocation_sums],
         )
         refs = ref_allocs[allocation_idx]
         f: double = fitness_allocs[allocation_idx][depth]
-        return self._pgc_cache[refs[np_choice(tuple(range(len(refs))), p=f / f.sum())]]
+        return self._pgc_cache[refs[np_choice(list(range(len(refs))), p=f / f.sum())]]
 
     def items(self) -> Generator[tuple[int, xGC], None, None]:
         """A view of the gGCs in the GPC."""
