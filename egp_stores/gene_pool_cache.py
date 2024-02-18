@@ -306,8 +306,9 @@ class gene_pool_cache(static_store):
         """Optimize the store by looking for commonalities between genetic codes.
             1. Check to see if Leaf GC's have any dependents in the GPC to reference.
             2. If all of a Leaf GC's dependents are in the GPC then the leaf data can be deleted.
-            3. Duplicate interfaces can be deleted.
-            4. Duplicate connections can be deleted.
+            3. Duplicate graphs can be deleted.
+            4. Duplicate interfaces can be deleted.
+            5. Duplicate connections can be deleted.
         Try to minimize memory overhead by doing one at a time.
         NOTE: Optimizing the GPC does not delete any genetic codes.
         """
@@ -325,8 +326,39 @@ class gene_pool_cache(static_store):
                 del self._common_ds[self.common_ds_idx[leaf]]
                 self.common_ds_idx[leaf] = -1
 
-        # #3
+							# #3
+							# Remove duplicate graphs
+         # This is more efficient than duplicating the interfaces and connections
+         graph_to_graph = {}
+							for gc in self.values():
+										grph = gc["graph"]
+            if grph not in graph_to_graph:
+               graph_to_graph[grph] = graph
+            else:
+               gc["graph"] = graph_to_graph[grph]
+
+        # #4
         # Remove duplicate interfaces
+						iface_to_iface = {}
+						for gc in self.values():
+									rows = gc["graph"].rows
+									for row, iface in enumerate(rows):
+													if iface not in iface_to_iface:
+																iface_to_iface[iface] = iface
+													else:
+																rows[row] = iface_to_iface[iface]
+
+							# #5
+							# Remove duplicate connections
+							cons_to_cons = {}
+							for gc in self.values():
+										grph = gc["graph"]
+										if grph.connections not in cons_to_cons:
+													cons_to_cons[cons] = cons
+										else:
+													grph.connections = cons_to_cons[cons]
+
+									
                         
 
     def leaves(self) -> Iterator[int]:
@@ -350,3 +382,4 @@ class gene_pool_cache(static_store):
 
 # Instanciate the gene pool cache
 _genetic_code.gene_pool_cache = gene_pool_cache()
+
