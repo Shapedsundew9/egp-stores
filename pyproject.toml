@@ -1,6 +1,27 @@
+[tool.black]
+line-length = 140
+target-version = ['py311']
+
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "egp-stores"
+version = "0.1.0dev1"
+authors = [
+  { name="Shaped Sundew" },
+]
+description = "Erasmus Genetic Programming stores."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Shapedsundew9/egp-stores"
+"Bug Tracker" = "https://github.com/Shapedsundew9/egp-stores/issues"

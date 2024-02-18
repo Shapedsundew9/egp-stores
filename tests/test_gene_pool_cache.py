@@ -52,14 +52,9 @@ gGC_entry_validator.schema["outputs"]["required"] = True
 
 _TEST_DATA: dict[int, dict[str, Any]]
 if USE_SUREBREC:
-    _TEST_DATA = {
-        ggc["ref"]: choose_p(ggc)
-        for ggc in generate(gGC_entry_validator, 100, -1022196250, True)
-    }
+    _TEST_DATA = {ggc["ref"]: choose_p(ggc) for ggc in generate(gGC_entry_validator, 100, -1022196250, True)}
 else:
-    with open(
-        join(dirname(__file__), "data/simple_gl.json"), "r", encoding="utf-8"
-    ) as fptr:
+    with open(join(dirname(__file__), "data/simple_gl.json"), "r", encoding="utf-8") as fptr:
         # FIXME: simple_gl is in GL entry format & we need to convert to GP entry format
         _TEST_DATA = {ggc["ref"]: ggc for ggc in load(fptr)}
 
@@ -92,70 +87,44 @@ def element_is_match(a: Any, b: Any) -> bool:
 
 
 def dict_is_match(dct, gpc: gene_pool_cache, removed: list[int] = []) -> None:
-    assert len(dct) == len(
-        gpc
-    ), f"Length of dictionary ({len(dct)}) != length of GPC ({len(gpc)})!"
+    assert len(dct) == len(gpc), f"Length of dictionary ({len(dct)}) != length of GPC ({len(gpc)})!"
     for dct_ref in dct.keys():
         assert dct_ref in gpc, f"Dictionary {ref_str(dct_ref)} not in GPC!"
-    assert set(dct.keys()) == set(
-        gpc.keys()
-    ), "Dictionary & GPC sets of keys() do not match!"
+    assert set(dct.keys()) == set(gpc.keys()), "Dictionary & GPC sets of keys() do not match!"
     assert set((v["pgc_ref"] for v in dct.values())) == set(
         (v["pgc_ref"] for v in gpc.values())
     ), "Dictionary & GPC sets of values() do not match!"
-    assert set(dct.keys()) == set(
-        (k for k, _ in gpc.items())
-    ), "GPC items() keys do not match dictionary keys()."
+    assert set(dct.keys()) == set((k for k, _ in gpc.items())), "GPC items() keys do not match dictionary keys()."
     assert set((v["pgc_ref"] for v in dct.values())) == set(
         (v["pgc_ref"] for _, v in gpc.items())
     ), "Dictionary & GPC sets of values from items do not match!"
     for dct_ggc in dct.values():
         gpc_ggc: xGC = gpc[dct_ggc["ref"]]
-        _logger.debug(
-            f"Checking GGC ref {ref_str(gpc_ggc['ref'])} dct_ggc ref {ref_str(dct_ggc['ref'])}"
-        )
-        assert (
-            dct_ggc["ref"] == gpc_ggc["ref"]
-        ), f"Dictionary {ref_str(dct_ggc['ref'])} not in order in GPC!"
+        _logger.debug(f"Checking GGC ref {ref_str(gpc_ggc['ref'])} dct_ggc ref {ref_str(dct_ggc['ref'])}")
+        assert dct_ggc["ref"] == gpc_ggc["ref"], f"Dictionary {ref_str(dct_ggc['ref'])} not in order in GPC!"
         for k, v in dct_ggc.items():
-            if (k in gpc._ggc_cache.fields and not is_pgc(dct_ggc)) or (
-                k in gpc._pgc_cache.fields and is_pgc(dct_ggc)
-            ):
+            if (k in gpc._ggc_cache.fields and not is_pgc(dct_ggc)) or (k in gpc._pgc_cache.fields and is_pgc(dct_ggc)):
                 if isinstance(v, list) or isinstance(v, ndarray):
                     for i, j in zip(v, gpc[dct_ggc["ref"]][k]):
                         if not element_is_match(i, j):
-                            _logger.debug(
-                                f"'{k}' does not match: Test data element {i} != GPC element {j}."
-                            )
-                            _logger.debug(
-                                f"'{k}' test data: {v}, GPC data: {gpc[dct_ggc['ref']][k]}."
-                            )
+                            _logger.debug(f"'{k}' does not match: Test data element {i} != GPC element {j}.")
+                            _logger.debug(f"'{k}' test data: {v}, GPC data: {gpc[dct_ggc['ref']][k]}.")
                             assert element_is_match(i, j)
                 else:
                     if not element_is_match(v, gpc[dct_ggc["ref"]][k]):
-                        _logger.debug(
-                            f"'{k}' test data: {v}, GPC data: {gpc[dct_ggc['ref']][k]}."
-                        )
+                        _logger.debug(f"'{k}' test data: {v}, GPC data: {gpc[dct_ggc['ref']][k]}.")
                         assert element_is_match(v, gpc[dct_ggc["ref"]][k])
         for ref in removed:
-            assert (
-                ref not in gpc
-            ), f"Dictionary ref {ref_str(ref)} should not be in GPC!"
+            assert ref not in gpc, f"Dictionary ref {ref_str(ref)} should not be in GPC!"
 
 
 def test_fill_element() -> None:
     gpc: gene_pool_cache = gene_pool_cache(delta_size=4)
     for ggc in _TEST_DATA.values():
-        _logger.debug(
-            f"Adding entry {ref_str(ggc['ref'])}:\n{pformat(ggc, sort_dicts=True, indent=4)}"
-        )
+        _logger.debug(f"Adding entry {ref_str(ggc['ref'])}:\n{pformat(ggc, sort_dicts=True, indent=4)}")
         gpc[ggc["ref"]] = ggc
-    _logger.info(
-        f"Dict size: sys.getsizeof = {getsizeof(_TEST_DATA)} bytes, pympler.asizeof = {asizeof(_TEST_DATA)} bytes."
-    )
-    _logger.info(
-        f"GPC size: sys.getsizeof = {getsizeof(gpc)} bytes, pympler.asizeof = {asizeof(gpc)} bytes."
-    )
+    _logger.info(f"Dict size: sys.getsizeof = {getsizeof(_TEST_DATA)} bytes, pympler.asizeof = {asizeof(_TEST_DATA)} bytes.")
+    _logger.info(f"GPC size: sys.getsizeof = {getsizeof(gpc)} bytes, pympler.asizeof = {asizeof(gpc)} bytes.")
     # 14:01:30 INFO test_gene_pool_cache.py 93 Dict size: sys.getsizeof = 4688 bytes, pympler.asizeof = 5399488 bytes.
     # 14:01:30 INFO test_gene_pool_cache.py 94 GPC size: sys.getsizeof = 56 bytes, pympler.asizeof = 204576 bytes.
     dict_is_match(_TEST_DATA, gpc)
@@ -209,9 +178,7 @@ def test_delete_update() -> None:
     for ref in removed:
         del dct[ref]
         del gpc[ref]
-    update: dict[int, dict[str, Any]] = {
-        k: v for k, v in _TEST_DATA.items() if k in removed[::2]
-    }
+    update: dict[int, dict[str, Any]] = {k: v for k, v in _TEST_DATA.items() if k in removed[::2]}
     dct.update(update)
     gpc.update(update)
     dict_is_match(dct, gpc, removed=removed[1::2])
@@ -230,6 +197,4 @@ def test_write_performance() -> None:
         for k, v in _TEST_DATA.items():
             gpc[k] = v
     stop: float = time()
-    _logger.fatal(
-        f"Creation times: dict: {midway - start:0.4f}s, GPC: {stop - midway:0.4f}s"
-    )
+    _logger.fatal(f"Creation times: dict: {midway - start:0.4f}s, GPC: {stop - midway:0.4f}s")

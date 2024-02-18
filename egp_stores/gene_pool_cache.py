@@ -47,16 +47,31 @@ For read-only GC's in the persistent Gene Pool loaded on startup ~75% of the dat
 is read only avoiding 4x as many CoW's giving a total factor of ~16x for that data.
 Bit of an anti-pattern for python but in this case the savings are worth it.
 """
-from gc import collect
-from typing import Any, overload
-from logging import Logger, getLogger, NullHandler, DEBUG
-from numpy import empty, int64, argsort, bytes_, int32, full, iinfo
-from numpy.typing import NDArray
 
-from egp_types.store import static_store, dynamic_store, DDSL
-from egp_types._genetic_code import _genetic_code, PURGED_GENETIC_CODE, EMPTY_GENETIC_CODE
+from gc import collect
+from typing import Any, Iterator, overload
+from logging import Logger, getLogger, NullHandler, DEBUG
+from numpy import asarray, dtype, empty, int64, argsort, bytes_, int32, full, iinfo, zeros
+from numpy._typing import _32Bit
+from numpy.typing import NDArray
+from copy import deepcopy
+from os.path import join, dirname
+from json import load
+from egp_utils.base_validator import base_validator
+from egp_utils.common import merge
+
+from egp_utils.store import static_store, dynamic_store, DDSL
+from egp_types._genetic_code import (
+    _genetic_code,
+    PURGED_GENETIC_CODE,
+    EMPTY_GENETIC_CODE,
+    SIGNATURE_FIELDS
+)
 from egp_types.graph import graph
 from .genomic_library import genomic_library
+from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
+from .gene_pool_common import GP_RAW_TABLE_SCHEMA
+from pypgtable.pypgtable_typing import SchemaColumn
 
 
 # Logging
@@ -66,9 +81,38 @@ _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 _LOG_DEEP_DEBUG: bool = _logger.isEnabledFor(DEBUG - 1)
 
 
+# TODO: Make a new cerberus validator for this extending the pypgtable raw_table_column_config_validator
+# TODO: Definition class below should inherit from pypgtable (when it has a typeddict defined)
+
+
+class ConfigDefinition(SchemaColumn):
+    """GPC field configuration."""
+
+    ggc_only: bool
+    pgc_only: bool
+    indexed: bool
+    signature: bool
+    init_only: bool
+    reference: bool
+
+
 # Constants
 GPC_DEFAULT_SIZE: int = 2**4
 INT64_MAX: int = iinfo(int64).max
+
+
+# Load the GPC config definition which is a superset of the pypgtable column definition
+GPC_FIELD_SCHEMA: dict[str, dict[str, Any]] = deepcopy(PYPGTABLE_COLUMN_CONFIG_SCHEMA)
+with open(join(dirname(__file__), "formats/gpc_field_definition_format.json"), "r", encoding="utf8") as file_ptr:
+    merge(GPC_FIELD_SCHEMA, load(file_ptr))
+gpc_field_validator: base_validator = base_validator(GPC_FIELD_SCHEMA, purge_uknown=True)
+GPC_RAW_TABLE_SCHEMA: dict[str, dict[str, Any]] = deepcopy(GP_RAW_TABLE_SCHEMA)
+with open(join(dirname(__file__), "formats/gpc_table_format.json"), "r", encoding="utf8") as file_ptr:
+    merge(GPC_RAW_TABLE_SCHEMA, load(file_ptr))
+GPC_TABLE_SCHEMA: dict[str, ConfigDefinition] = {k: gpc_field_validator.normalized(v) for k, v in GPC_RAW_TABLE_SCHEMA.items()}
+GPC_HIGHER_LAYER_COLS: tuple[str, ...] = tuple(key for key in filter(lambda x: x[0] == "_", GPC_TABLE_SCHEMA))
+GPC_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple(x[1:] for x in GPC_HIGHER_LAYER_COLS) + ("updated", "created")
+GPC_REFERENCE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get("reference", False), GPC_TABLE_SCHEMA.items())))
 
 
 class gpc_ds_common(static_store):
@@ -81,7 +125,7 @@ class gpc_ds_common(static_store):
         self.generation: NDArray[int64] = empty(self._size, dtype=int64)
 
 
-class ds_index_wrapper():
+class ds_index_wrapper:
     """Wrapper for dynamic store index."""
 
     index_mapping: NDArray[int32]
@@ -131,12 +175,13 @@ class gene_pool_cache(static_store):
         """Initialize the storage."""
         super().__init__(size)
         # Static store members
-        self.genetic_code: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.gca: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = empty(self._size, dtype=_genetic_code)
+        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
         self.graph: NDArray[Any] = empty(self._size, dtype=graph)
-        self.ancestor_a: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.ancestor_b: NDArray[Any] = empty(self._size, dtype=_genetic_code)
+        self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
 
         # Utility static store members
         # Access sequence of genetic codes. Used to determine which ones were least recently used.
@@ -154,17 +199,19 @@ class gene_pool_cache(static_store):
         self._common_ds_members: dict[str, common_ds_index_wrapper] = {m: common_ds_index_wrapper(m) for m in self._common_ds.members}
 
     @overload
-    def __getitem__(self, item: int) -> _genetic_code: ...
+    def __getitem__(self, item: int) -> _genetic_code:
+        ...
 
     @overload
-    def __getitem__(self, item: str) -> Any: ...
+    def __getitem__(self, item: str) -> Any:
+        ...
 
     def __getitem__(self, item) -> Any:
         """Return the object at the specified index or the member to be indexed.
         There are 3 possible look up methods:
         1. By index - return the genetic code at the index
         2. By static store member name - return the member from the static store which then can be indexed
-        3. By dynamic store member name - return a wrapper to map the GPC index to the dynamic store index     
+        3. By dynamic store member name - return a wrapper to map the GPC index to the dynamic store index
         """
         if isinstance(item, int):
             return self.genetic_code[item]
@@ -174,10 +221,11 @@ class gene_pool_cache(static_store):
 
     def __delitem__(self, idx: int) -> None:
         """Free the specified index. Note this does not try and remove all references as purge() does."""
-        #TODO: Push to genomic library
+        # TODO: Push to genomic library
         self.genetic_code[idx] = PURGED_GENETIC_CODE
         self.gca[idx] = EMPTY_GENETIC_CODE
         self.gcb[idx] = EMPTY_GENETIC_CODE
+        self.pgc[idx] = EMPTY_GENETIC_CODE
         self.graph[idx] = None
         self.ancestor_a[idx] = EMPTY_GENETIC_CODE
         self.ancestor_b[idx] = EMPTY_GENETIC_CODE
@@ -205,15 +253,17 @@ class gene_pool_cache(static_store):
 
     def reset(self, size: int | None = None) -> None:
         """A full reset of the store allows the size to be changed. All genetic codes
-        are deleted which pushes the genetic codes to the genomic library as required."""
+        are deleted which pushes the genetic codes to the genomic library as required.
+        """
         super().reset(size)
         # Static store members
-        self.genetic_code: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.gca: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = empty(self._size, dtype=_genetic_code)
+        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
         self.graph: NDArray[Any] = empty(self._size, dtype=graph)
-        self.ancestor_a: NDArray[Any] = empty(self._size, dtype=_genetic_code)
-        self.ancestor_b: NDArray[Any] = empty(self._size, dtype=_genetic_code)
+        self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
 
         # Utility static store members
         # Access sequence of genetic codes. Used to determine which ones were least recently used.
@@ -251,6 +301,51 @@ class gene_pool_cache(static_store):
 
         # Clean up the heap: Intentionally calleding collect() regardless of the debug level.
         _logger.debug(f"{collect()} unreachable objects not collected after purge.")
+
+    def optimize(self) -> None:
+        """Optimize the store by looking for commonalities between genetic codes.
+            1. Check to see if Leaf GC's have any dependents in the GPC to reference.
+            2. If all of a Leaf GC's dependents are in the GPC then the leaf data can be deleted.
+            3. Duplicate interfaces can be deleted.
+            4. Duplicate connections can be deleted.
+        Try to minimize memory overhead by doing one at a time.
+        NOTE: Optimizing the GPC does not delete any genetic codes.
+        """
+        # Make a dictionary of signatures to indices in the GPC
+        sig_to_idx: dict[memoryview, int] = {gc["signature"]: idx for idx, gc in enumerate(self.genetic_code) if gc.valid()}
+
+        # #1 & #2
+        # For every leaf GC check to see if any of its dependents are in the GPC
+        # If they are then populate the object reference field
+        for leaf in self.leaves():
+            indices = tuple(sig_to_idx.get(self.genetic_code[leaf][field], -1) for field in SIGNATURE_FIELDS)
+            for field, idx in (x for x in zip(SIGNATURE_FIELDS, indices) if x[1] >= 0):
+                self[field][leaf] = self.genetic_code[idx]
+            if all(idx >= 0 for idx in indices):
+                del self._common_ds[self.common_ds_idx[leaf]]
+                self.common_ds_idx[leaf] = -1
+
+        # #3
+        # Remove duplicate interfaces
+                        
+
+    def leaves(self) -> Iterator[int]:
+        """Return each index of the leaf genetic codes."""
+        for idx, val in enumerate(self.common_ds_idx):
+            if val != -1:
+                yield idx
+
+    def keys(self) -> Iterator[memoryview]:
+        """Return the signatures of the genetic codes."""
+        for gc in self.values():
+            if gc.valid():
+                yield gc["signature"].data
+
+    def values(self) -> Iterator[_genetic_code]:
+        """Return the genetic codes."""
+        for gc in self.genetic_code:
+            if gc.valid():
+                yield gc
 
 
 # Instanciate the gene pool cache

@@ -13,16 +13,14 @@ _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 
 
-
 def test_default_instanciation() -> None:
     """Simple instanciation."""
     # Define genomic library configuration & instanciate
     gl_config: TableConfigNorm = gl_default_config()
-    gl_config['delete_db'] = True
+    gl_config["delete_db"] = True
     glib: genomic_library = genomic_library(gl_config)
 
     # Establish the Gene Pool
     gp_config: GenePoolConfigNorm = gp_default_config()
     gpool: gene_pool = gene_pool({}, glib, gp_config)
     gpool.sub_process_init()
-

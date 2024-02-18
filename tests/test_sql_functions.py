@@ -6,9 +6,9 @@ from copy import copy, deepcopy
 from json import load
 from os.path import dirname, join
 from random import randint, random
-from typing import Any, Literal, Generator
+from typing import Any, Generator, Literal
 
-from numpy import all, array, float64, int64
+from numpy import array, float64, int64
 from numpy.typing import NDArray
 from pypgtable import table
 from pytest import approx
@@ -46,10 +46,8 @@ _CONFIG: dict[str, Any] = {
     "wait_for_table": False,
 }
 
-with open(
-    join(dirname(__file__), "../egp_stores/formats/meta_table_format.json"), "r"
-) as file_ptr:
-    _META_TABLE_SCHEMA = load(file_ptr)
+with open(join(dirname(__file__), "../egp_stores/formats/gp_meta_table_format.json"), "r", encoding='ascii') as file_ptr:
+    _META_TABLE_SCHEMA: Any = load(file_ptr)
 
 
 def _random_pair(length, base: VCpair | None = None) -> VCpair:
@@ -72,19 +70,12 @@ def _random_pair(length, base: VCpair | None = None) -> VCpair:
     """
     if base is None:
         values: list[float] = [random() for _ in range(length)]
-        variable_vector_weights_update: list[int] = [
-            randint(1, 50000) for _ in range(length)
-        ]
+        variable_vector_weights_update: list[int] = [randint(1, 50000) for _ in range(length)]
     else:
         counts: list[int] = [randint(1, 50000) for _ in base[1]]
         variable_vector_weights_update = [b + c for c, b in zip(counts, base[1])]
-        values = [
-            v + (((1 - v) * random()) * c) / (b + c)
-            for c, v, b in zip(counts, base[0], base[1])
-        ]
-        variable_vector_weights_update.extend(
-            [_DEFAULT_COUNT] * (len(base[0]) - length)
-        )
+        values = [v + (((1 - v) * random()) * c) / (b + c) for c, v, b in zip(counts, base[0], base[1])]
+        variable_vector_weights_update.extend([_DEFAULT_COUNT] * (len(base[0]) - length))
         values.extend([_DEFAULT_VALUE] * (len(base[0]) - length))
     return values, variable_vector_weights_update
 
@@ -121,9 +112,7 @@ def _random_set(lengths: tuple[int, int, int]) -> tuple[VCpair, VCpair, VCpair]:
     )
 
 
-def _random_length(
-    criteria: Literal["<"] | Literal[">"] | Literal["="], csp_len: int
-) -> int:
+def _random_length(criteria: Literal["<"] | Literal[">"] | Literal["="], csp_len: int) -> int:
     """Generate a length meeting the criteria.
 
     > return a length greater than csp_len (max csp_len * 2)
@@ -151,9 +140,7 @@ def _random_length(
     return x_len
 
 
-def _random_lengths(
-    criteria: tuple[Literal["<", ">", "="], Literal["<", ">", "="]]
-) -> tuple[int, int, int]:
+def _random_lengths(criteria: tuple[Literal["<", ">", "="], Literal["<", ">", "="]]) -> tuple[int, int, int]:
     """Generate a tuple of random lengths meeting the criteria.
 
     The maximum length of any array is 200.
@@ -226,9 +213,7 @@ def _expected_result(array_set: tuple[VCpair, VCpair, VCpair]) -> VCpair:
     cspv: list[float] = array_set[2][0]
     cspc: list[int] = array_set[2][1]
 
-    max_len: int = max(
-        (len(cscv), len(cscc), len(pscv), len(pscc), len(cspv), len(cspc))
-    )
+    max_len: int = max((len(cscv), len(cscc), len(pscv), len(pscc), len(cspv), len(cspc)))
     while len(cscv) < max_len:
         cscv.append(1.0)
     while len(cscc) < max_len:
@@ -288,7 +273,7 @@ def _generate_test_case() -> Generator[tuple[VCset, VCpair], None, None]:
         yield inputs, _expected_result(deepcopy(inputs))
 
 
-def _create_testcases(n):
+def _create_testcases(n) -> list[dict[str, Any]]:
     """Genetrate a list of test cases.
 
     Args
@@ -300,9 +285,7 @@ def _create_testcases(n):
     list(dict): Output of _generate_test_case()
          in a dictionary format.
     """
-    testcase_generator: Generator[
-        tuple[VCset, VCpair], None, None
-    ] = _generate_test_case()
+    testcase_generator: Generator[tuple[VCset, VCpair], None, None] = _generate_test_case()
     testcases: list[dict[str, Any]] = []
     for idx in range(n):
         testcase: tuple[VCset, VCpair] = next(testcase_generator)
@@ -350,13 +333,14 @@ def meta_table_config(config: dict[str, Any], create: bool = False) -> dict[str,
 def test_sql_array_update() -> None:
     """Validate the SQL functions match the model."""
 
-    meta: table = table(meta_table_config(_CONFIG, create=True))
     t: table = table(_CONFIG)
+    with open(join(dirname(__file__), "../egp_stores/data/gp_functions.sql"), "r", encoding="ascii") as fileptr:
+        sql_text: str = fileptr.read()
+        t.raw.arbitrary_sql(sql_text, read=False)
+    meta: table = table(meta_table_config(_CONFIG, create=True))
     if t.raw.creator:
         meta = table(meta_table_config(_CONFIG, create=True))
-        with open(
-            join(dirname(__file__), "../egp_stores/data/gl_functions.sql"), "r"
-        ) as fileptr:
+        with open(join(dirname(__file__), "../egp_stores/data/gl_functions.sql"), "r", encoding="ascii") as fileptr:
             sql_text: str = fileptr.read()
             sql_text = sql_text.replace("__meta_table_name__", meta.raw.config["table"])
             sql_text = sql_text.replace("__gl_table_name__", t.raw.config["table"])
