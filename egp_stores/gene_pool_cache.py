@@ -48,30 +48,32 @@ is read only avoiding 4x as many CoW's giving a total factor of ~16x for that da
 Bit of an anti-pattern for python but in this case the savings are worth it.
 """
 
-from gc import collect
-from typing import Any, Iterator, overload
-from logging import Logger, getLogger, NullHandler, DEBUG
-from numpy import asarray, dtype, empty, int64, argsort, bytes_, int32, full, iinfo, zeros
-from numpy._typing import _32Bit
-from numpy.typing import NDArray
 from copy import deepcopy
-from os.path import join, dirname
+from gc import collect
 from json import load
+from logging import DEBUG, Logger, NullHandler, getLogger
+from os.path import dirname, join
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, cast, overload
+
+from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code
+from egp_types.connections import connections
+from egp_types.genetic_code import genetic_code
+from egp_types.graph import graph
+from egp_types.interface import interface
+from egp_types.rows import rows
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
-
-from egp_utils.store import static_store, dynamic_store, DDSL
-from egp_types._genetic_code import (
-    _genetic_code,
-    PURGED_GENETIC_CODE,
-    EMPTY_GENETIC_CODE,
-    SIGNATURE_FIELDS
-)
-from egp_types.graph import graph
-from .genomic_library import genomic_library
-from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
-from .gene_pool_common import GP_RAW_TABLE_SCHEMA
+from egp_utils.store import DDSL, dynamic_store, static_store
+from numpy import argsort, bytes_, empty, full, iinfo, int32, int64, zeros
+from numpy.typing import NDArray
 from pypgtable.pypgtable_typing import SchemaColumn
+from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
+
+from .gene_pool_common import GP_RAW_TABLE_SCHEMA
+
+# Type hinting
+if TYPE_CHECKING:
+    from .gene_pool import gene_pool
 
 
 # Logging
@@ -115,48 +117,39 @@ GPC_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple(x[1:] for x in GPC_HIGHER_LAY
 GPC_REFERENCE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get("reference", False), GPC_TABLE_SCHEMA.items())))
 
 
-class gpc_ds_common(static_store):
-    """Gene Pool Cache dynamic store common to all genetic code types."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialize the storage."""
-        super().__init__(*args, **kwargs)
-        self.signature: NDArray[bytes_] = empty((self._size, 32), dtype=bytes_)
-        self.generation: NDArray[int64] = empty(self._size, dtype=int64)
-
-
 class ds_index_wrapper:
     """Wrapper for dynamic store index."""
 
-    index_mapping: NDArray[int32]
     dstore: dynamic_store
     genetic_codes: NDArray[Any]
 
-    def __init__(self, member: str) -> None:
+    def __init__(self, member: str, index_mapping: NDArray[int32]) -> None:
         """Initialize the wrapper."""
         self.member: str = member
+        self.index_mapping: NDArray[int32] = index_mapping
 
     def __delitem__(self, _: int) -> None:
-        """Removing a member element is not supported."""
+        """Removing a member element is not supported. Delete the index in the store."""
         raise RuntimeError("The dynamic store does not support deleting member elements.")
 
     def __getitem__(self, idx: int) -> Any:
         """Return the object at the specified index."""
         cls = type(self)
-        mapping_idx: int32 = cls.index_mapping[idx]
+        mapping_idx: int32 = self.index_mapping[idx]
         if mapping_idx == -1:
             # If there is no mapping then the attribute is dynamically calculated
-            return getattr(cls.genetic_codes[idx], self.member)()
+            cls.genetic_codes[idx].make_leaf()
+            mapping_idx = self.index_mapping[idx]
         return cls.dstore[self.member][mapping_idx]
 
     def __setitem__(self, idx: int, val: Any) -> None:
         """Set the object at the specified index."""
         cls = type(self)
-        mapping_idx: int32 | int = cls.index_mapping[idx]
+        mapping_idx: int32 | int = self.index_mapping[idx]
         # If the mapping has not yet been created then create it.
         if mapping_idx == -1:
             mapping_idx = cls.dstore.next_index()
-            cls.index_mapping[idx] = mapping_idx
+            self.index_mapping[idx] = mapping_idx
         cls.dstore[self.member][mapping_idx] = val
 
 
@@ -164,14 +157,25 @@ class common_ds_index_wrapper(ds_index_wrapper):
     """Wrapper for common dynamic store index."""
 
 
+class gpc_ds_common(static_store):
+    """Gene Pool Cache dynamic store for terminal genetic codes."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize the storage."""
+        super().__init__(*args, **kwargs)
+        self.signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.ancestor_a_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.ancestor_b_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.pgc_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.gca_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.gcb_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.generation: NDArray[int64] = zeros(self._size, dtype=int64)
+
+
 class gene_pool_cache(static_store):
     """A memory efficient store genetic codes."""
 
-    # The global genomic library
-    # Is used in nodes for lazy loading of dependent nodes
-    gl: genomic_library = genomic_library()
-
-    def __init__(self, size: int = GPC_DEFAULT_SIZE) -> None:
+    def __init__(self, size: int = GPC_DEFAULT_SIZE, push_to_gp: Callable[[tuple[genetic_code, ...]], None] = lambda x: None) -> None:
         """Initialize the storage."""
         super().__init__(size)
         # Static store members
@@ -188,23 +192,30 @@ class gene_pool_cache(static_store):
         self.access_sequence: NDArray[int64] = full(self._size, INT64_MAX, dtype=int64)
         # Common dynamic store indices. -1 means not in the common dynamic store.
         self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
+        # Status byte for each genetic code.
+        # 0 = dirty bit. If set then the genetic code has been modified and needs to be written to the GP.
+        # 1:7 = reserved (read and written as 0)
+        self.status_byte: NDArray[bytes_] = zeros(self._size, dtype=bytes_)
 
         # Not static store members: Must begin with '_'
         self._common_ds = dynamic_store(gpc_ds_common, max((size.bit_length() - 4, DDSL)))
 
         # Set up dynamic store member index wrappers
-        common_ds_index_wrapper.index_mapping = self.common_ds_idx
         common_ds_index_wrapper.dstore = self._common_ds
         common_ds_index_wrapper.genetic_codes = self.genetic_code
-        self._common_ds_members: dict[str, common_ds_index_wrapper] = {m: common_ds_index_wrapper(m) for m in self._common_ds.members}
+        # If a member has the "_idx" suffix then it indexes the signatures store
+        self._common_ds_members: dict[str, common_ds_index_wrapper] = {
+            m: common_ds_index_wrapper(m, self.common_ds_idx) for m in self._common_ds.members
+        }
+
+        # Method to push genetic codes to the gene pool when the GPC is full
+        self._push_to_gp: Callable[[tuple[genetic_code, ...]], None] = push_to_gp
 
     @overload
-    def __getitem__(self, item: int) -> _genetic_code:
-        ...
+    def __getitem__(self, item: int) -> _genetic_code: ...
 
     @overload
-    def __getitem__(self, item: str) -> Any:
-        ...
+    def __getitem__(self, item: str) -> Any: ...
 
     def __getitem__(self, item) -> Any:
         """Return the object at the specified index or the member to be indexed.
@@ -215,14 +226,16 @@ class gene_pool_cache(static_store):
         """
         if isinstance(item, int):
             return self.genetic_code[item]
-        # First see if a member is in the static store
+        # First see if a member is in the static store (NB: These mask the dynamic store members of the same name)
         member: Any = getattr(self, item, None)
         return member if member is not None else self._common_ds_members[item]
 
     def __delitem__(self, idx: int) -> None:
-        """Free the specified index. Note this does not try and remove all references as purge() does."""
-        # TODO: Push to genomic library
-        self.genetic_code[idx] = PURGED_GENETIC_CODE
+        """Free the specified index. Note this does not try and remove all references as purge() does.
+        It also does not push to the GP. It is intended to be used when the genetic code is no longer needed.
+        """
+        self.status_byte[idx] = 0
+        self.genetic_code[idx] = EMPTY_GENETIC_CODE
         self.gca[idx] = EMPTY_GENETIC_CODE
         self.gcb[idx] = EMPTY_GENETIC_CODE
         self.pgc[idx] = EMPTY_GENETIC_CODE
@@ -236,20 +249,29 @@ class gene_pool_cache(static_store):
             self.common_ds_idx[idx] = -1
 
     def assign_index(self, obj: _genetic_code) -> int:
-        """Return the next index for a new node."""
+        """Return the next index for a new genetic code. DO NOT USE outside of the
+        gene_pool_cache or genetic_code classes. Use add() instead."""
         idx: int = self.next_index()
         self.genetic_code[idx] = obj
         return idx
 
     def next_index(self) -> int:
         """Return the next available index. If there are no more purge the genetic codes that have not been
-        used in the longest time."""
+        used in the longest time. DO NOT USE outside of the gene_pool_cache or genetic_code classes."""
         try:
             idx: int = super().next_index()
         except OverflowError:
             self.purge()
             idx = super().next_index()
         return idx
+
+    def add(self, ggc: dict[str, Any]) -> int:
+        """Add a dict type genetic code to the store."""
+        return genetic_code(ggc).idx
+
+    def update(self, ggcs: Iterable[dict[str, Any]]) -> list[int]:
+        """Add a dict type genetic code to the store."""
+        return [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
 
     def reset(self, size: int | None = None) -> None:
         """A full reset of the store allows the size to be changed. All genetic codes
@@ -272,7 +294,8 @@ class gene_pool_cache(static_store):
         self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
 
         # Re-initialize the common dynamic store wrapper
-        common_ds_index_wrapper.index_mapping = self.common_ds_idx
+        for index_wrapper in self._common_ds_members.values():
+            index_wrapper.index_mapping = self.common_ds_idx
         common_ds_index_wrapper.genetic_codes = self.genetic_code
 
         # Clean up the heap
@@ -286,14 +309,19 @@ class gene_pool_cache(static_store):
         # data may be referenced by other objects. The purge function ensures that
         # all references to the purged data in the store are removed.
         num_to_purge: int = int(self._size * fraction)
-        _logger.info(f"Purging {int(100*fraction)}% = ({num_to_purge} of {self._size}) of the store")
+        _logger.info(f"Purging {int(100 * fraction)}% = ({num_to_purge} of {self._size}) of the store")
         purge_indices: set[int] = set(argsort(self.access_sequence)[:num_to_purge])
         if _LOG_DEEP_DEBUG:
             _logger.debug(f"Purging indices: {purge_indices}")
             _logger.debug(f"Access sequence numbers {self.access_sequence}")
         # Convert GC's with purged dependents into leaf nodes
+        gc: _genetic_code
         for gc in self.genetic_code:
-            gc.make_leaf(purge_indices)
+            gc.purge(purge_indices)
+
+        # Push dirty genetic codes to the GP
+        dirty_indices: set[int] = {idx for idx, byte in enumerate(self.status_byte) if byte & 1}
+        self._push_to_gp(tuple(self.genetic_code[idx] for idx in dirty_indices))
 
         # Delete the purged objects
         for idx in purge_indices:
@@ -326,40 +354,41 @@ class gene_pool_cache(static_store):
                 del self._common_ds[self.common_ds_idx[leaf]]
                 self.common_ds_idx[leaf] = -1
 
-							# #3
-							# Remove duplicate graphs
-         # This is more efficient than duplicating the interfaces and connections
-         graph_to_graph = {}
-							for gc in self.values():
-										grph = gc["graph"]
-            if grph not in graph_to_graph:
-               graph_to_graph[grph] = graph
+        # #3
+        # Remove duplicate graphs
+        # This is more efficient than duplicating the interfaces and connections
+        # NOTE: The hash of a graph is not the same as the instance of a graph.
+        graph_to_graph: dict[graph, graph] = {}
+        for gc in self.values():
+            _graph: graph = gc["graph"]
+            if _graph not in graph_to_graph:
+                graph_to_graph[_graph] = _graph
             else:
-               gc["graph"] = graph_to_graph[grph]
+                gc["graph"] = graph_to_graph[_graph]
 
         # #4
         # Remove duplicate interfaces
-						iface_to_iface = {}
-						for gc in self.values():
-									rows = gc["graph"].rows
-									for row, iface in enumerate(rows):
-													if iface not in iface_to_iface:
-																iface_to_iface[iface] = iface
-													else:
-																rows[row] = iface_to_iface[iface]
+        # NOTE: The hash of an interface is not the same as the instance of an interface.
+        iface_to_iface: dict[interface, interface] = {}
+        for gc in self.values():
+            _rows: rows = gc["graph"].rows
+            for row, iface in enumerate(_rows):
+                if iface not in iface_to_iface:
+                    iface_to_iface[iface] = iface
+                else:
+                    _rows[row] = iface_to_iface[iface]
 
-							# #5
-							# Remove duplicate connections
-							cons_to_cons = {}
-							for gc in self.values():
-										grph = gc["graph"]
-										if grph.connections not in cons_to_cons:
-													cons_to_cons[cons] = cons
-										else:
-													grph.connections = cons_to_cons[cons]
-
-									
-                        
+        # #5
+        # Remove duplicate connections
+        # NOTE: The hash of connections is not the same as the instance of connections.
+        cons_to_cons: dict[connections, connections] = {}
+        for gc in self.values():
+            _graph = gc["graph"]
+            cons: connections = _graph.connections
+            if cons not in cons_to_cons:
+                cons_to_cons[cons] = cons
+            else:
+                _graph.connections = cons_to_cons[cons]
 
     def leaves(self) -> Iterator[int]:
         """Return each index of the leaf genetic codes."""
@@ -378,8 +407,3 @@ class gene_pool_cache(static_store):
         for gc in self.genetic_code:
             if gc.valid():
                 yield gc
-
-
-# Instanciate the gene pool cache
-_genetic_code.gene_pool_cache = gene_pool_cache()
-

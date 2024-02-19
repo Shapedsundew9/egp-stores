@@ -5,6 +5,7 @@ from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from typing import Any, TYPE_CHECKING, cast, Iterable
+from functools import partial
 
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
@@ -202,7 +203,8 @@ class gene_pool(genetic_material_store):
 
         self._populations: dict[int, PopulationConfigNorm] = deepcopy(populations)
         self.glib: genomic_library = glib
-        self.pool: gene_pool_cache = genetic_code.get_gpc()
+        self.pool: gene_pool_cache = gene_pool_cache(2**20, partial(_update, gp=self))
+        genetic_code.set_gpc(self.pool)
 
         self._tables: dict[str, table] = {"meta_data": table(self.config["meta_data"])}
         if self._tables["meta_data"].raw.creator:
@@ -216,7 +218,7 @@ class gene_pool(genetic_material_store):
         self.select = self._tables["gene_pool"].select
 
         # Modify the update strings to use the right table for the gene pool.
-        self._update_str: str = UPDATE_STR.replace("__table__", self.config["gene_pool"]["table"])
+        self.update_str: str = UPDATE_STR.replace("__table__", self.config["gene_pool"]["table"])
 
         # Fill the local cache with populations in the persistent GP.
         self._populate_local_cache()
@@ -241,7 +243,7 @@ class gene_pool(genetic_material_store):
 
     def _populate_local_cache(self) -> None:
         """Gather the latest and greatest from the GP.
-        1. Load all the codons.
+        1. Load all the codons from the genomic library (this ensures we get the all).
         2. For each population select the population size with the highest survivability.
         3. Pull in the pGC's that created all the selected population & sub-gGCs
         4. Pull in the best pGC's at each layer.
@@ -250,34 +252,22 @@ class gene_pool(genetic_material_store):
         _logger.info("Populating local cache from Gene Pool.")
         self.pull(list(self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
         for population in self._populations.values():
-            literals: dict[str, Any] = {
-                "limit": population["size"],
-                "puid": population["uid"],
-            }
-            for ggc in self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS):
-                genetic_code(ggc)
-
+            literals: dict[str, Any] = {"limit": population["size"], "puid": population["uid"]}
+            self.pool.update(self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS))
             self.library.raw.ptr_map_def(_PTR_MAP_PLUS_PGC)
-            for ggc in self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.keys())}):
-                genetic_code(ggc)
-
+            self.pool.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.keys())}))
             self.library.raw.ptr_map_def(_PTR_MAP)
             literals = {"limit": population["size"]}
             for layer in range(NUM_PGC_LAYERS):
                 literals["exclusions"] = list({v["pgc"]["signature"] for v in self.pool.values()})
                 literals["layer"] = layer
-                for pgc in self.library.select(_LOAD_PGC_SQL, literals):
-                    genetic_code(pgc)
-            
+                self.pool.update(self.library.select(_LOAD_PGC_SQL, literals))
+        # Saves space by removing duplicate constant objects
+        self.pool.optimize()
 
-    def pull(self, signatures: list[bytes], population_uid: int | None = None) -> None:
+    def pull(self, signatures: list[memoryview], population_uid: int | None = None) -> None:
         """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
-
-        LGC's are converted to gGC's.
-        Higher layer fields are updated.
-        Nodes & edges are added the the GP graph.
-        SHA256 signatures are replaced by GP references.
-
+        LGC's are converted to gGC's and higher layer fields are updated.
         NOTE: This *MUST* be the only function pulling GC's into the GP from the GL.
 
         Args
@@ -285,20 +275,9 @@ class gene_pool(genetic_material_store):
         signatures: Signatures to pull from the genomic library.
         population_uid: Population UID to label ALL top level GC's with
         """
-        # FIXME: This does not work in the case of a signature reference collision occuring at the same time
-        # in two different sub-processes. In that scenario one GL GC will be pulled into the GP and the second will 'fail'
-        # the UPSERT. Fail as in corrupt the record by trying to update one GC with another. Obviously this needs
-        # to be prevented. Since the reference can only realistically be defined by the sub-process we need
-        # to identify and explicitly fail the entire UPSERT, catch in the sub-process, create a new shifted reference
-        # (which means remembering the old shift), map that to everywhere needed & try the entire UPSERT again.
-        # Thoughts:
-        #   0. Capture the shift value for all created references
-        #   1. INSERT and on conflict return the references and abort all the inserts
-        #   2. Check if conflicts are the same GC's (that got added after we checked for them): Remove from INSERT as needed.
-        #   2. Create new references (and capture shifts) for all genuine conflicts and remap
-        #   3. Go to #1
         if _LOG_DEBUG:
             _logger.debug(f"Recursively pulling {signatures} into Gene Pool for population {population_uid}.")
+        batch: list[dict[str, Any]] = []
         for ggc in self.glib.recursive_select(_SIGNATURE_SQL, {"matches": signatures}, _LOAD_GL_COLUMNS):
             if population_uid is not None and ggc["signature"] in signatures:
                 ggc["population_uid"] = population_uid
@@ -309,60 +288,42 @@ class gene_pool(genetic_material_store):
             # the higher layer. i.e. after being pulled from the GMS _field must = field. field can then
             # be modified by the lower layer. NB: Updating the value back into the GMS is a bit more complex.
             ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
+            batch.append(ggc)
 
-            # Push to GP
-            # FIXME: Do this update in batch for better performance.
-            updates = next(self.library.upsert((ggc,), self._update_str, {}, GP_UPDATE_RETURNING_COLS))
-            ggc.update(updates)
+            # Batch push to GP as it is more efficient
+            if len(batch) == 1024:
+                self._pull(batch)
+        # Push the remaining GC's
+        self._pull(batch)
 
-            # Push to GPC
+    def _pull(self, batch: list[dict[str, Any]]) -> None:
+        """Helper method for the pull method. This is the batch insertion into the GP."""
+        # The GP has its own higher layer columns for the GPC which are returned by the upsert.
+        for ggc, update in zip(batch, self.library.upsert(batch, self.update_str, {}, GP_UPDATE_RETURNING_COLS)):
+            ggc.update(update)
             ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
-            self.pool[ggc["ref"]] = ggc
+            self.pool.add(ggc)
             if _LOG_DEBUG:
+                for k, v in ggc.items():
+                    if isinstance(v, memoryview):
+                        ggc[k] = bytes(v)
                 if not gGC_entry_validator.validate(ggc):
                     _logger.error(ggc)
                     _logger.error(gGC_entry_validator.error_str())
                     assert False, "GGC is not valid!"
+        # Empty the batch list
+        batch.clear()
 
-    def push(self) -> None:
-        """Insert or update locally modified gGC's into the persistent gene_pool.
 
-        NOTE: This *MUST* be the only function pushing GC's to the persistent GP.
-        """
-        # To keep pylance happy about 'possibly unbound'
-        updated_gcs: list[xGC] = []
-        modified_gcs: list[xGC] = updated_gcs
-        if _LOG_DEBUG:
-            _logger.debug("Validating GP DB entries.")
-            updated_gcs = []
-            modified_gcs: list[xGC] = list(self.pool.modified(all_fields=True))
-            for ggc in modified_gcs:
-                if not gGC_entry_validator.validate(ggc):
-                    _logger.error(f"Modified gGC invalid:\n{gGC_entry_validator.error_str()}.")
-                    raise ValueError("Modified gGC is invalid. See log.")
+def _update(gp: gene_pool, ggcs: tuple[genetic_code, ...]) -> None:
+    """Push the genetic codes into the persistent store of the gene pool."""
 
-        for updated_gc in self.library.upsert(self.pool.modified(), self._update_str, {}, GPC_UPDATE_RETURNING_COLS):
-            ggc: xGC = self.pool[updated_gc["ref"]]
-            ggc["__modified__"] = False
-            ggc.update(updated_gc)
-            ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
-            if _LOG_DEBUG:
-                updated_gcs.append(ggc)
-
-        if _LOG_DEBUG:
-            modified_in_gpc: tuple[str, ...] = tuple((ref_str(v["ref"]) for v in self.pool.modified()))
-            assert not modified_gcs, f"Modified gGCs were not written to the GP: {modified_in_gpc}"
-            assert len(modified_gcs) == len(updated_gcs), "The number of updated and modified gGCs differ!"
-
-            # Check updates are correct
-            for uggc, mggc in zip(updated_gcs, modified_gcs):
-                if not gGC_entry_validator.validate(uggc):
-                    _logger.error(f"Updated gGC invalid:\n{gGC_entry_validator.error_str()}.")
-                    raise ValueError("Updated gGC is invalid. See log.")
-
-                # Sanity the read-only fields
-                for field in filter(lambda x: mggc.fields[x].get("read_only", False), mggc.fields):  # pylint: disable=cell-var-from-loop
-                    assert uggc[field] == mggc[field], "Read-only fields must remain unchanged!"
-
-                # Writable fields may not have changed. Only one we can be sure of is 'updated'.
-                assert uggc["updated"] > mggc["updated"], "Updated timestamp must be newer!"
+    # To keep pylance happy about 'possibly unbound'
+    if _LOG_DEBUG:
+        _logger.debug("Validating GPC GC's --> GP DB entries.")
+        for _ in filter(lambda x: not gGC_entry_validator.validate(x), ggcs):
+            _logger.error(f"gGC from GPC to be pushed to persistent GP is invalid:\n{gGC_entry_validator.error_str()}.")
+            assert False, "gGC from GPC to be pushed to persistent GP is invalid"
+    gp.library.upsert(ggcs, gp.update_str)
+    # TODO: Add a check to see if the upsert updated the GP as expected. Can do this
+    # by pulling the GC's back out and checking the values.

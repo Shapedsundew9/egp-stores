@@ -1,5 +1,4 @@
 {
-
     "f_count": {
         "ggc_only": true,
         "nullable": true,
@@ -11,16 +10,6 @@
         "nullable": true,
         "type": "REAL",
         "volatile": true
-    },
-    "igraph": {
-        "nullable": true,
-        "type": "BYTEA"
-    },
-    "lc": {
-        "description": "The line count of the callable.",
-        "init_only": true,
-        "nullable": true,
-        "type": "SMALLINT"
     },
     "offspring_count": {
         "default": "0",
