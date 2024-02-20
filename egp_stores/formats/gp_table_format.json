@@ -11,11 +11,6 @@
         "type": "REAL",
         "volatile": true
     },
-    "offspring_count": {
-        "default": "0",
-        "type": "INTEGER",
-        "volatile": true
-    },
     "population_uid": {
         "description": "TODO: Population will be defined by reference (as class will be).",
         "ggc_only": true,

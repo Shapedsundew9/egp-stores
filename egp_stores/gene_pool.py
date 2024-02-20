@@ -40,8 +40,8 @@ if TYPE_CHECKING:
 
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
-# TODO: Add a _LOG_CONSISTENCY which additionally does consistency checking
 _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
+_LOG_DEEP_DEBUG: bool = _logger.isEnabledFor(DEBUG - 1)
 
 
 _GP_CONVERSIONS: Conversions = (
@@ -251,19 +251,25 @@ class gene_pool(genetic_material_store):
         """
         _logger.info("Populating local cache from Gene Pool.")
         self.pull(list(self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
+        _logger.info("Codons pulled from genomic library.")
         for population in self._populations.values():
             literals: dict[str, Any] = {"limit": population["size"], "puid": population["uid"]}
+            _logger.info(f"Pulling {population['size']} from population {population['uid']}.")
             self.pool.update(self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS))
             self.library.raw.ptr_map_def(_PTR_MAP_PLUS_PGC)
+            _logger.info("Pulling population sub-GC's and pGC's from the Gene Pool.")
             self.pool.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.keys())}))
             self.library.raw.ptr_map_def(_PTR_MAP)
             literals = {"limit": population["size"]}
             for layer in range(NUM_PGC_LAYERS):
                 literals["exclusions"] = list({v["pgc"]["signature"] for v in self.pool.values()})
                 literals["layer"] = layer
+                _logger.info(f"Pulling best pGC's at layer {layer}.")
                 self.pool.update(self.library.select(_LOAD_PGC_SQL, literals))
         # Saves space by removing duplicate constant objects
+        _logger.info("Optimizing the local cache.")
         self.pool.optimize()
+        _logger.info("Local cache loaded & optimized. Ready to evolve!")
 
     def pull(self, signatures: list[memoryview], population_uid: int | None = None) -> None:
         """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
@@ -275,7 +281,7 @@ class gene_pool(genetic_material_store):
         signatures: Signatures to pull from the genomic library.
         population_uid: Population UID to label ALL top level GC's with
         """
-        if _LOG_DEBUG:
+        if _LOG_DEEP_DEBUG:
             _logger.debug(f"Recursively pulling {signatures} into Gene Pool for population {population_uid}.")
         batch: list[dict[str, Any]] = []
         for ggc in self.glib.recursive_select(_SIGNATURE_SQL, {"matches": signatures}, _LOAD_GL_COLUMNS):
@@ -292,8 +298,11 @@ class gene_pool(genetic_material_store):
 
             # Batch push to GP as it is more efficient
             if len(batch) == 1024:
+                _logger.info(f"Inserting batch of {len(batch)} into Gene Pool.")
                 self._pull(batch)
+
         # Push the remaining GC's
+        _logger.info(f"Inserting final partial batch of {len(batch)} into Gene Pool.")
         self._pull(batch)
 
     def _pull(self, batch: list[dict[str, Any]]) -> None:
@@ -303,7 +312,7 @@ class gene_pool(genetic_material_store):
             ggc.update(update)
             ggc.update({k: ggc[k[1:]] for k in GPC_HIGHER_LAYER_COLS})
             self.pool.add(ggc)
-            if _LOG_DEBUG:
+            if _LOG_DEEP_DEBUG:
                 for k, v in ggc.items():
                     if isinstance(v, memoryview):
                         ggc[k] = bytes(v)
@@ -319,7 +328,7 @@ def _update(gp: gene_pool, ggcs: tuple[genetic_code, ...]) -> None:
     """Push the genetic codes into the persistent store of the gene pool."""
 
     # To keep pylance happy about 'possibly unbound'
-    if _LOG_DEBUG:
+    if _LOG_DEEP_DEBUG:
         _logger.debug("Validating GPC GC's --> GP DB entries.")
         for _ in filter(lambda x: not gGC_entry_validator.validate(x), ggcs):
             _logger.error(f"gGC from GPC to be pushed to persistent GP is invalid:\n{gGC_entry_validator.error_str()}.")

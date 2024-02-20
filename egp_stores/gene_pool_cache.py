@@ -55,7 +55,7 @@ from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, cast, overload
 
-from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code
+from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code, PROXY_SIGNATURE_FIELDS, NULL_SIGNATURE
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
 from egp_types.graph import graph
@@ -64,7 +64,7 @@ from egp_types.rows import rows
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
 from egp_utils.store import DDSL, dynamic_store, static_store
-from numpy import argsort, bytes_, empty, full, iinfo, int32, int64, zeros
+from numpy import argsort, bytes_, empty, full, iinfo, int32, int64, zeros, ones, float32
 from numpy.typing import NDArray
 from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
@@ -138,6 +138,7 @@ class ds_index_wrapper:
         mapping_idx: int32 = self.index_mapping[idx]
         if mapping_idx == -1:
             # If there is no mapping then the attribute is dynamically calculated
+            self.index_mapping[idx] = cls.dstore.next_index()
             cls.genetic_codes[idx].make_leaf()
             mapping_idx = self.index_mapping[idx]
         return cls.dstore[self.member][mapping_idx]
@@ -163,13 +164,34 @@ class gpc_ds_common(static_store):
     def __init__(self, *args, **kwargs) -> None:
         """Initialize the storage."""
         super().__init__(*args, **kwargs)
-        self.signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
         self.ancestor_a_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
         self.ancestor_b_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.pgc_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.code_depth: NDArray[int32] = zeros(self._size, dtype=int32)
+        self.codon_depth: NDArray[int32] = zeros(self._size, dtype=int32)
         self.gca_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
         self.gcb_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
         self.generation: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.num_codes: NDArray[int32] = zeros(self._size, dtype=int32)
+        self.num_codons: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.pgc_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        self.signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        # 224 bytes per entry (usually 8192 so 1835008) + 112 bytes per member (12 so 1324) + 56 bytes for the base class
+        # Total = 1.8 MB per block
+
+    def __delitem__(self, idx: int) -> None:
+        """Free the specified index. Note this does not try and remove all references as purge() does."""
+        self.ancestor_a_signature[idx] = NULL_SIGNATURE
+        self.ancestor_b_signature[idx] = NULL_SIGNATURE
+        self.code_depth[idx] = 0
+        self.codon_depth[idx] = 0
+        self.gca_signature[idx] = NULL_SIGNATURE
+        self.gcb_signature[idx] = NULL_SIGNATURE
+        self.num_codes[idx] = 0
+        self.num_codons[idx] = 0
+        self.generation[idx] = 0
+        self.pgc_signature[idx] = NULL_SIGNATURE
+        self.signature[idx] = NULL_SIGNATURE
+        return super().__delitem__(idx)
 
 
 class gene_pool_cache(static_store):
@@ -179,27 +201,41 @@ class gene_pool_cache(static_store):
         """Initialize the storage."""
         super().__init__(size)
         # Static store members
-        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
         self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
         self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.e_count: NDArray[int32] = ones(self._size, dtype=int32)
+        self.evolvability: NDArray[float32] = ones(self._size, dtype=float32)
+        self.f_count: NDArray[int32] = ones(self._size, dtype=int32)
+        self.fitness: NDArray[float32] = zeros(self._size, dtype=float32)
+        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
+        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.properties: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.reference_count: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.survivability: NDArray[float32] = zeros(self._size, dtype=float32)
+        # 84 bytes per entry (usually 2**20 so 88080384) 13 members at 112 bytes each = 1456 bytes + 56 bytes for the base class
+        # Utility members below = 17 bytes = 17825792 bytes
+        # Total = 101 MB + graphs
+        # Graphs are hard to estimate: 384 in connections, 256 in rows + 64 in graph = 704 bytes per graph
+        # Duplication rate of 8 (?) so 2**(20-3) * 704 = 88 MB
+        # Assume dynamic store is 1/16 of the size of the static store so 1.8 * 2**(20-13-4) = 14.4 MB
+        # Total of totals = 101 + 88 + 14.4 = 203.4 MB
 
         # Utility static store members
         # Access sequence of genetic codes. Used to determine which ones were least recently used.
         self.access_sequence: NDArray[int64] = full(self._size, INT64_MAX, dtype=int64)
-        # Common dynamic store indices. -1 means not in the common dynamic store.
-        self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
+        # The genetic codes themselves
+        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
         # Status byte for each genetic code.
         # 0 = dirty bit. If set then the genetic code has been modified and needs to be written to the GP.
         # 1:7 = reserved (read and written as 0)
         self.status_byte: NDArray[bytes_] = zeros(self._size, dtype=bytes_)
 
+        # Common dynamic store indices. -1 means not in the common dynamic store.
+        self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
         # Not static store members: Must begin with '_'
-        self._common_ds = dynamic_store(gpc_ds_common, max((size.bit_length() - 4, DDSL)))
-
+        self._common_ds = dynamic_store(gpc_ds_common, max((size.bit_length() - 7, DDSL)))
         # Set up dynamic store member index wrappers
         common_ds_index_wrapper.dstore = self._common_ds
         common_ds_index_wrapper.genetic_codes = self.genetic_code
@@ -210,6 +246,25 @@ class gene_pool_cache(static_store):
 
         # Method to push genetic codes to the gene pool when the GPC is full
         self._push_to_gp: Callable[[tuple[genetic_code, ...]], None] = push_to_gp
+
+    def __delitem__(self, idx: int) -> None:
+        """Free the specified index. Note this does not try and remove all references as purge() does.
+        It also does not push to the GP. It is intended to be used when the genetic code is no longer needed.
+        """
+        self.ancestor_a[idx] = EMPTY_GENETIC_CODE
+        self.ancestor_b[idx] = EMPTY_GENETIC_CODE
+        self.gca[idx] = EMPTY_GENETIC_CODE
+        self.gcb[idx] = EMPTY_GENETIC_CODE
+        self.graph[idx] = None
+        self.pgc[idx] = EMPTY_GENETIC_CODE
+
+        self.access_sequence[idx] = INT64_MAX
+        self.genetic_code[idx] = EMPTY_GENETIC_CODE
+        self.status_byte[idx] = 0
+        super().__delitem__(idx)
+        if self.common_ds_idx[idx] != -1:
+            del self._common_ds[self.common_ds_idx[idx]]
+            self.common_ds_idx[idx] = -1
 
     @overload
     def __getitem__(self, item: int) -> _genetic_code: ...
@@ -229,24 +284,6 @@ class gene_pool_cache(static_store):
         # First see if a member is in the static store (NB: These mask the dynamic store members of the same name)
         member: Any = getattr(self, item, None)
         return member if member is not None else self._common_ds_members[item]
-
-    def __delitem__(self, idx: int) -> None:
-        """Free the specified index. Note this does not try and remove all references as purge() does.
-        It also does not push to the GP. It is intended to be used when the genetic code is no longer needed.
-        """
-        self.status_byte[idx] = 0
-        self.genetic_code[idx] = EMPTY_GENETIC_CODE
-        self.gca[idx] = EMPTY_GENETIC_CODE
-        self.gcb[idx] = EMPTY_GENETIC_CODE
-        self.pgc[idx] = EMPTY_GENETIC_CODE
-        self.graph[idx] = None
-        self.ancestor_a[idx] = EMPTY_GENETIC_CODE
-        self.ancestor_b[idx] = EMPTY_GENETIC_CODE
-        self.access_sequence[idx] = INT64_MAX
-        super().__delitem__(idx)
-        if self.common_ds_idx[idx] != -1:
-            del self._common_ds[self.common_ds_idx[idx]]
-            self.common_ds_idx[idx] = -1
 
     def assign_index(self, obj: _genetic_code) -> int:
         """Return the next index for a new genetic code. DO NOT USE outside of the
@@ -271,7 +308,11 @@ class gene_pool_cache(static_store):
 
     def update(self, ggcs: Iterable[dict[str, Any]]) -> list[int]:
         """Add a dict type genetic code to the store."""
-        return [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
+        size_before: int = len(self)
+        retval = [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
+        size_after: int = len(self)
+        _logger.info(f"Added {size_after - size_before} genetic codes to the GPC")
+        return retval
 
     def reset(self, size: int | None = None) -> None:
         """A full reset of the store allows the size to be changed. All genetic codes
@@ -299,6 +340,7 @@ class gene_pool_cache(static_store):
         common_ds_index_wrapper.genetic_codes = self.genetic_code
 
         # Clean up the heap
+        _logger.info("GPC reset to {self._size} entries and cleared.")
         _logger.debug(f"{collect()} unreachable objects not collected after reset.")
 
         # Total = 2* 8 + 5 * 4 = 36 bytes + base class per element
@@ -312,7 +354,7 @@ class gene_pool_cache(static_store):
         _logger.info(f"Purging {int(100 * fraction)}% = ({num_to_purge} of {self._size}) of the store")
         purge_indices: set[int] = set(argsort(self.access_sequence)[:num_to_purge])
         if _LOG_DEEP_DEBUG:
-            _logger.debug(f"Purging indices: {purge_indices}")
+            _logger.info(f"Purging indices: {purge_indices}")
             _logger.debug(f"Access sequence numbers {self.access_sequence}")
         # Convert GC's with purged dependents into leaf nodes
         gc: _genetic_code
@@ -334,41 +376,34 @@ class gene_pool_cache(static_store):
         """Optimize the store by looking for commonalities between genetic codes.
             1. Check to see if Leaf GC's have any dependents in the GPC to reference.
             2. If all of a Leaf GC's dependents are in the GPC then the leaf data can be deleted.
-            3. Duplicate graphs can be deleted.
-            4. Duplicate interfaces can be deleted.
+            3. Duplicate interfaces can be deleted.
+            4. Duplicate rows can be deleted.
             5. Duplicate connections can be deleted.
+            6. Duplicate graphs can be deleted.
         Try to minimize memory overhead by doing one at a time.
         NOTE: Optimizing the GPC does not delete any genetic codes.
         """
         # Make a dictionary of signatures to indices in the GPC
-        sig_to_idx: dict[memoryview, int] = {gc["signature"]: idx for idx, gc in enumerate(self.genetic_code) if gc.valid()}
+        sig_to_idx: dict[memoryview, int] = {gc["signature"].tobytes(): idx for idx, gc in enumerate(self.genetic_code) if gc.valid()}
 
         # #1 & #2
         # For every leaf GC check to see if any of its dependents are in the GPC
         # If they are then populate the object reference field
+        count: int = 0
         for leaf in self.leaves():
-            indices = tuple(sig_to_idx.get(self.genetic_code[leaf][field], -1) for field in SIGNATURE_FIELDS)
+            indices = tuple(sig_to_idx.get(self.genetic_code[leaf][field].tobytes(), -1) for field in PROXY_SIGNATURE_FIELDS)
             for field, idx in (x for x in zip(SIGNATURE_FIELDS, indices) if x[1] >= 0):
                 self[field][leaf] = self.genetic_code[idx]
             if all(idx >= 0 for idx in indices):
                 del self._common_ds[self.common_ds_idx[leaf]]
                 self.common_ds_idx[leaf] = -1
+                count += 1
+        _logger.info(f"Found {count} leaf genetic codes that need not be leaves.")
 
         # #3
-        # Remove duplicate graphs
-        # This is more efficient than duplicating the interfaces and connections
-        # NOTE: The hash of a graph is not the same as the instance of a graph.
-        graph_to_graph: dict[graph, graph] = {}
-        for gc in self.values():
-            _graph: graph = gc["graph"]
-            if _graph not in graph_to_graph:
-                graph_to_graph[_graph] = _graph
-            else:
-                gc["graph"] = graph_to_graph[_graph]
-
-        # #4
         # Remove duplicate interfaces
         # NOTE: The hash of an interface is not the same as the instance of an interface.
+        count: int = 0
         iface_to_iface: dict[interface, interface] = {}
         for gc in self.values():
             _rows: rows = gc["graph"].rows
@@ -377,10 +412,27 @@ class gene_pool_cache(static_store):
                     iface_to_iface[iface] = iface
                 else:
                     _rows[row] = iface_to_iface[iface]
+                    count += 1
+        _logger.info(f"Removed {count} duplicate interfaces.")
+
+        # #4
+        # Remove duplicate rows
+        # NOTE: The hash of an row is not the same as the instance of a row.
+        count: int = 0
+        rows_to_rows: dict[rows, rows] = {}
+        for gc in self.values():
+            _rows: rows = gc["graph"].rows
+            if _rows not in rows_to_rows:
+                rows_to_rows[_rows] = _rows
+            else:
+                gc["graph"].rows = rows_to_rows[_rows]
+                count += 1
+        _logger.info(f"Removed {count} duplicate sets of rows.")
 
         # #5
         # Remove duplicate connections
         # NOTE: The hash of connections is not the same as the instance of connections.
+        count: int = 0
         cons_to_cons: dict[connections, connections] = {}
         for gc in self.values():
             _graph = gc["graph"]
@@ -389,6 +441,24 @@ class gene_pool_cache(static_store):
                 cons_to_cons[cons] = cons
             else:
                 _graph.connections = cons_to_cons[cons]
+                count += 1
+        _logger.info(f"Removed {count} duplicate graph connection definitions.")
+
+        # #6
+        # Remove duplicate graphs
+        # This is more efficient than duplicating the interfaces and connections
+        # NOTE: The hash of a graph is not the same as the instance of a graph.
+        count: int = 0
+        graph_to_graph: dict[graph, graph] = {}
+        for gc in self.values():
+            _graph: graph = gc["graph"]
+            if _graph not in graph_to_graph:
+                graph_to_graph[_graph] = _graph
+            else:
+                gc["graph"] = graph_to_graph[_graph]
+                count += 1
+        _logger.info(f"Removed {count} duplicate graphs.")
+        collect()
 
     def leaves(self) -> Iterator[int]:
         """Return each index of the leaf genetic codes."""
