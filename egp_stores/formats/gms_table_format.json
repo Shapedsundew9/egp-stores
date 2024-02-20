@@ -99,7 +99,7 @@
     },
     "num_codons": {
         "default": "0",
-        "type": "INTEGER"
+        "type": "BIGINT"
     },
     "num_inputs": {
         "default": "0",
