@@ -139,7 +139,7 @@ class ds_index_wrapper:
         if mapping_idx == -1:
             # If there is no mapping then the attribute is dynamically calculated
             self.index_mapping[idx] = cls.dstore.next_index()
-            cls.genetic_codes[idx].make_leaf()
+            getattr(cls.genetic_codes[idx], self.member)()
             mapping_idx = self.index_mapping[idx]
         return cls.dstore[self.member][mapping_idx]
 
