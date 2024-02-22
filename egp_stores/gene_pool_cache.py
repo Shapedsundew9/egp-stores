@@ -53,9 +53,9 @@ from gc import collect
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, cast, overload, Self, Generator
 
-from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code, PROXY_SIGNATURE_FIELDS, NULL_SIGNATURE
+from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code, PROXY_SIGNATURE_FIELDS, NULL_SIGNATURE, ALL_FIELDS
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
 from egp_types.graph import graph
@@ -285,6 +285,10 @@ class gene_pool_cache(static_store):
         member: Any = getattr(self, item, None)
         return member if member is not None else self._common_ds_members[item]
 
+    def __iter__(self) -> Iterator[_genetic_code]:
+        """Iterate over self."""
+        return self.values()
+
     def assign_index(self, obj: _genetic_code) -> int:
         """Return the next index for a new genetic code. DO NOT USE outside of the
         gene_pool_cache or genetic_code classes. Use add() instead."""
@@ -309,7 +313,7 @@ class gene_pool_cache(static_store):
     def update(self, ggcs: Iterable[dict[str, Any]]) -> list[int]:
         """Add a dict type genetic code to the store."""
         size_before: int = len(self)
-        retval = [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
+        retval: list[int] = [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
         size_after: int = len(self)
         _logger.info(f"Added {size_after - size_before} genetic codes to the GPC")
         return retval
@@ -320,19 +324,26 @@ class gene_pool_cache(static_store):
         """
         super().reset(size)
         # Static store members
-        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
         self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
         self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.e_count: NDArray[int32] = ones(self._size, dtype=int32)
+        self.evolvability: NDArray[float32] = ones(self._size, dtype=float32)
+        self.f_count: NDArray[int32] = ones(self._size, dtype=int32)
+        self.fitness: NDArray[float32] = zeros(self._size, dtype=float32)
+        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
+        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+        self.properties: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.reference_count: NDArray[int64] = zeros(self._size, dtype=int64)
+        self.survivability: NDArray[float32] = zeros(self._size, dtype=float32)
 
         # Utility static store members
         # Access sequence of genetic codes. Used to determine which ones were least recently used.
         self.access_sequence: NDArray[int64] = full(self._size, INT64_MAX, dtype=int64)
         # Common dynamic store indices. -1 means not in the common dynamic store.
         self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
+        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
 
         # Re-initialize the common dynamic store wrapper
         for index_wrapper in self._common_ds_members.values():
@@ -462,18 +473,15 @@ class gene_pool_cache(static_store):
 
     def leaves(self) -> Iterator[int]:
         """Return each index of the leaf genetic codes."""
-        for idx, val in enumerate(self.common_ds_idx):
-            if val != -1:
-                yield idx
+        for idx, _ in filter(lambda x: x[1] != -1, enumerate(self.common_ds_idx)):
+            yield idx
 
     def keys(self) -> Iterator[memoryview]:
         """Return the signatures of the genetic codes."""
         for gc in self.values():
-            if gc.valid():
-                yield gc["signature"].data
+            yield gc["signature"].data
 
     def values(self) -> Iterator[_genetic_code]:
         """Return the genetic codes."""
-        for gc in self.genetic_code:
-            if gc.valid():
-                yield gc
+        for gc in filter(lambda x: x.valid(), self.genetic_code):
+            yield gc

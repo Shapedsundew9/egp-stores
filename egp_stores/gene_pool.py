@@ -16,7 +16,7 @@ from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
 
-from .gene_pool_cache import gene_pool_cache, GPC_HIGHER_LAYER_COLS
+from .gene_pool_cache import gene_pool_cache, GPC_HIGHER_LAYER_COLS, ALL_FIELDS
 
 from .gene_pool_common import (
     GP_HIGHER_LAYER_COLS,
@@ -250,7 +250,7 @@ class gene_pool(genetic_material_store):
         5. If not enough quality population pull from higher layer or create eGC's.
         """
         _logger.info("Populating local cache from Gene Pool.")
-        self.pull(list(self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
+        self.pull(list(s[0] for s in self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
         _logger.info("Codons pulled from genomic library.")
         for population in self._populations.values():
             literals: dict[str, Any] = {"limit": population["size"], "puid": population["uid"]}
@@ -282,7 +282,7 @@ class gene_pool(genetic_material_store):
         population_uid: Population UID to label ALL top level GC's with
         """
         if _LOG_DEEP_DEBUG:
-            _logger.debug(f"Recursively pulling {signatures} into Gene Pool for population {population_uid}.")
+            _logger.debug(f"Recursively pulling {[s.hex() for s in signatures]} into Gene Pool for population {population_uid}.")
         batch: list[dict[str, Any]] = []
         for ggc in self.glib.recursive_select(_SIGNATURE_SQL, {"matches": signatures}, _LOAD_GL_COLUMNS):
             if population_uid is not None and ggc["signature"] in signatures:

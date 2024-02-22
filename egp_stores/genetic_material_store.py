@@ -123,7 +123,7 @@ class genetic_material_store:
 
     def __getitem__(self, signature: memoryview) -> dict[str, Any]:
         """Pull a genetic code from the genomic library."""
-        entry = tuple(self.recursive_select("WHERE {signature} = {sig}", {"sig": signature}))
+        entry = tuple(self.select("WHERE {signature} = {sig}", {"sig": signature}))
         if entry:
             return entry[0]
         raise KeyError
