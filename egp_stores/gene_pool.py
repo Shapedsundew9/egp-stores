@@ -16,7 +16,7 @@ from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
 
-from .gene_pool_cache import gene_pool_cache, GPC_HIGHER_LAYER_COLS, ALL_FIELDS
+from .gene_pool_cache import gene_pool_cache, GPC_HIGHER_LAYER_COLS
 
 from .gene_pool_common import (
     GP_HIGHER_LAYER_COLS,
@@ -258,7 +258,7 @@ class gene_pool(genetic_material_store):
             self.pool.update(self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS))
             self.library.raw.ptr_map_def(_PTR_MAP_PLUS_PGC)
             _logger.info("Pulling population sub-GC's and pGC's from the Gene Pool.")
-            self.pool.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.keys())}))
+            self.pool.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.signatures())}))
             self.library.raw.ptr_map_def(_PTR_MAP)
             literals = {"limit": population["size"]}
             for layer in range(NUM_PGC_LAYERS):

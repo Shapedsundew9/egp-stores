@@ -1,12 +1,13 @@
 """Test the Gene Pool."""
-from logging import Logger, NullHandler, getLogger, INFO
+from logging import INFO, Logger, NullHandler, getLogger
 from typing import Any
 
+from egp_types.genetic_code import STORE_ALL_MEMBERS
 from pypgtable.pypgtable_typing import TableConfigNorm
 
 from egp_stores.egp_typing import GenePoolConfigNorm
 from egp_stores.gene_pool import default_config as gp_default_config
-from egp_stores.gene_pool import gene_pool, ALL_FIELDS
+from egp_stores.gene_pool import gene_pool
 from egp_stores.genomic_library import default_config as gl_default_config
 from egp_stores.genomic_library import genomic_library
 
@@ -33,6 +34,6 @@ def test_default_consistency() -> None:
     for gpc_gc in gp.pool:
         gl_gc: dict[str, Any] = glib[gpc_gc["signature"].data]
         gp_gc: dict[str, Any] = gp[gpc_gc["signature"].data]
-        for field in ALL_FIELDS:
+        for field in STORE_ALL_MEMBERS:
             assert gpc_gc[field] == gl_gc[field]
             assert gpc_gc[field] == gp_gc[field]

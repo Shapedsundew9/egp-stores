@@ -53,9 +53,9 @@ from gc import collect
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, cast, overload, Self, Generator
+from typing import Any, Callable, Iterable, Iterator, cast
 
-from egp_types._genetic_code import EMPTY_GENETIC_CODE, SIGNATURE_FIELDS, _genetic_code, PROXY_SIGNATURE_FIELDS, NULL_SIGNATURE, ALL_FIELDS
+from egp_types._genetic_code import _genetic_code, EMPTY_GENETIC_CODE, NULL_SIGNATURE, STORE_PROXY_SIGNATURE_MEMBERS
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
 from egp_types.graph import graph
@@ -70,10 +70,6 @@ from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
 from .gene_pool_common import GP_RAW_TABLE_SCHEMA
-
-# Type hinting
-if TYPE_CHECKING:
-    from .gene_pool import gene_pool
 
 
 # Logging
@@ -266,24 +262,19 @@ class gene_pool_cache(static_store):
             del self._common_ds[self.common_ds_idx[idx]]
             self.common_ds_idx[idx] = -1
 
-    @overload
-    def __getitem__(self, item: int) -> _genetic_code: ...
-
-    @overload
-    def __getitem__(self, item: str) -> Any: ...
-
-    def __getitem__(self, item) -> Any:
+    def __getitem__(self, idx: int) -> _genetic_code:
         """Return the object at the specified index or the member to be indexed.
         There are 3 possible look up methods:
         1. By index - return the genetic code at the index
         2. By static store member name - return the member from the static store which then can be indexed
         3. By dynamic store member name - return a wrapper to map the GPC index to the dynamic store index
         """
-        if isinstance(item, int):
-            return self.genetic_code[item]
-        # First see if a member is in the static store (NB: These mask the dynamic store members of the same name)
-        member: Any = getattr(self, item, None)
-        return member if member is not None else self._common_ds_members[item]
+        if idx < 0:
+            raise IndexError("Negative indices are not supported.")
+        return self.genetic_code[idx]
+
+    def __setitem__(self, _: str, __: Any) -> None:
+        raise RuntimeError("The genetic code store does not support setting members directly. Use add().")
 
     def __iter__(self) -> Iterator[_genetic_code]:
         """Iterate over self."""
@@ -402,9 +393,10 @@ class gene_pool_cache(static_store):
         # If they are then populate the object reference field
         count: int = 0
         for leaf in self.leaves():
-            indices = tuple(sig_to_idx.get(self.genetic_code[leaf][field].tobytes(), -1) for field in PROXY_SIGNATURE_FIELDS)
-            for field, idx in (x for x in zip(SIGNATURE_FIELDS, indices) if x[1] >= 0):
-                self[field][leaf] = self.genetic_code[idx]
+            indices = tuple(sig_to_idx.get(self.genetic_code[leaf][field].tobytes(), -1) for field in STORE_PROXY_SIGNATURE_MEMBERS)
+            for field, idx in (x for x in zip(STORE_PROXY_SIGNATURE_MEMBERS, indices) if x[1] >= 0):
+                _logger.debug(f"Leaf {leaf} has a dependent in the GPC at index {idx} for field {field}")
+                self[leaf][field] = self.genetic_code[idx]
             if all(idx >= 0 for idx in indices):
                 del self._common_ds[self.common_ds_idx[leaf]]
                 self.common_ds_idx[leaf] = -1
@@ -473,15 +465,18 @@ class gene_pool_cache(static_store):
 
     def leaves(self) -> Iterator[int]:
         """Return each index of the leaf genetic codes."""
+        # TODO: See how much faster this would be as numpy array manipulation
         for idx, _ in filter(lambda x: x[1] != -1, enumerate(self.common_ds_idx)):
             yield idx
 
-    def keys(self) -> Iterator[memoryview]:
+    def signatures(self) -> Iterator[memoryview]:
         """Return the signatures of the genetic codes."""
         for gc in self.values():
             yield gc["signature"].data
 
     def values(self) -> Iterator[_genetic_code]:
         """Return the genetic codes."""
+        # TODO: See how much faster this would be as numpy array manipulation
+        # e.g. for gc in self.genetic_code[self.genetic_code != EMPTY_GENETIC_CODE & self.genetic_code != PURGED_GENETIC_CODE]
         for gc in filter(lambda x: x.valid(), self.genetic_code):
             yield gc
