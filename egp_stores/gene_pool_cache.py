@@ -55,16 +55,16 @@ from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from typing import Any, Callable, Iterable, Iterator, cast
 
-from egp_types._genetic_code import _genetic_code, EMPTY_GENETIC_CODE, NULL_SIGNATURE, STORE_PROXY_SIGNATURE_MEMBERS
+from egp_types._genetic_code import _genetic_code, EMPTY_GENETIC_CODE, NULL_SIGNATURE, STORE_PROXY_SIGNATURE_MEMBERS, DEFAULT_STATIC_MEMBER_VALUES, DEFAULT_DYNAMIC_MEMBER_VALUES
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
-from egp_types.graph import graph
+from egp_types.graph import graph, EMPTY_GRAPH
 from egp_types.interface import interface
 from egp_types.rows import rows
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
 from egp_utils.store import DDSL, dynamic_store, static_store
-from numpy import argsort, bytes_, empty, full, iinfo, int32, int64, zeros, ones, float32
+from numpy import argsort, bytes_, ndarray, full, iinfo, int32, int64, zeros
 from numpy.typing import NDArray
 from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
@@ -154,40 +154,35 @@ class common_ds_index_wrapper(ds_index_wrapper):
     """Wrapper for common dynamic store index."""
 
 
+def dynamic_val_type(size: int, member: str) -> NDArray:
+    """Return the default store object of the member."""
+    value: Any = DEFAULT_DYNAMIC_MEMBER_VALUES[member]
+    if isinstance(value, ndarray):
+        return zeros((size, 32), dtype=bytes_)
+    return full(size, value, dtype=type(value))
+
+
 class gpc_ds_common(static_store):
     """Gene Pool Cache dynamic store for terminal genetic codes."""
 
     def __init__(self, *args, **kwargs) -> None:
         """Initialize the storage."""
         super().__init__(*args, **kwargs)
-        self.ancestor_a_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.ancestor_b_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.code_depth: NDArray[int32] = zeros(self._size, dtype=int32)
-        self.codon_depth: NDArray[int32] = zeros(self._size, dtype=int32)
-        self.gca_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.gcb_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.generation: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.num_codes: NDArray[int32] = zeros(self._size, dtype=int32)
-        self.num_codons: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.pgc_signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
-        self.signature: NDArray[bytes_] = zeros((self._size, 32), dtype=bytes_)
+        for member in DEFAULT_DYNAMIC_MEMBER_VALUES:
+            setattr(self, member, dynamic_val_type(self._size, member))
         # 224 bytes per entry (usually 8192 so 1835008) + 112 bytes per member (12 so 1324) + 56 bytes for the base class
         # Total = 1.8 MB per block
 
     def __delitem__(self, idx: int) -> None:
         """Free the specified index. Note this does not try and remove all references as purge() does."""
-        self.ancestor_a_signature[idx] = NULL_SIGNATURE
-        self.ancestor_b_signature[idx] = NULL_SIGNATURE
-        self.code_depth[idx] = 0
-        self.codon_depth[idx] = 0
-        self.gca_signature[idx] = NULL_SIGNATURE
-        self.gcb_signature[idx] = NULL_SIGNATURE
-        self.num_codes[idx] = 0
-        self.num_codons[idx] = 0
-        self.generation[idx] = 0
-        self.pgc_signature[idx] = NULL_SIGNATURE
-        self.signature[idx] = NULL_SIGNATURE
+        for member, value in DEFAULT_DYNAMIC_MEMBER_VALUES.items():
+            getattr(self, member)[idx] = value
         return super().__delitem__(idx)
+
+
+def static_val_type(member: str) -> tuple[Any, type]:
+    """Return the default value and type of the member."""
+    return DEFAULT_STATIC_MEMBER_VALUES[member], type(DEFAULT_STATIC_MEMBER_VALUES[member])
 
 
 class gene_pool_cache(static_store):
@@ -197,19 +192,8 @@ class gene_pool_cache(static_store):
         """Initialize the storage."""
         super().__init__(size)
         # Static store members
-        self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.e_count: NDArray[int32] = ones(self._size, dtype=int32)
-        self.evolvability: NDArray[float32] = ones(self._size, dtype=float32)
-        self.f_count: NDArray[int32] = ones(self._size, dtype=int32)
-        self.fitness: NDArray[float32] = zeros(self._size, dtype=float32)
-        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
-        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.properties: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.reference_count: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.survivability: NDArray[float32] = zeros(self._size, dtype=float32)
+        for member in DEFAULT_STATIC_MEMBER_VALUES:
+            setattr(self, member, full(self._size, *static_val_type(member)))
         # 84 bytes per entry (usually 2**20 so 88080384) 13 members at 112 bytes each = 1456 bytes + 56 bytes for the base class
         # Utility members below = 17 bytes = 17825792 bytes
         # Total = 101 MB + graphs
@@ -247,12 +231,8 @@ class gene_pool_cache(static_store):
         """Free the specified index. Note this does not try and remove all references as purge() does.
         It also does not push to the GP. It is intended to be used when the genetic code is no longer needed.
         """
-        self.ancestor_a[idx] = EMPTY_GENETIC_CODE
-        self.ancestor_b[idx] = EMPTY_GENETIC_CODE
-        self.gca[idx] = EMPTY_GENETIC_CODE
-        self.gcb[idx] = EMPTY_GENETIC_CODE
-        self.graph[idx] = None
-        self.pgc[idx] = EMPTY_GENETIC_CODE
+        for member, value in DEFAULT_STATIC_MEMBER_VALUES.items():
+            getattr(self, member)[idx] = value
 
         self.access_sequence[idx] = INT64_MAX
         self.genetic_code[idx] = EMPTY_GENETIC_CODE
@@ -315,19 +295,8 @@ class gene_pool_cache(static_store):
         """
         super().reset(size)
         # Static store members
-        self.ancestor_a: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.ancestor_b: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.e_count: NDArray[int32] = ones(self._size, dtype=int32)
-        self.evolvability: NDArray[float32] = ones(self._size, dtype=float32)
-        self.f_count: NDArray[int32] = ones(self._size, dtype=int32)
-        self.fitness: NDArray[float32] = zeros(self._size, dtype=float32)
-        self.gca: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.gcb: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.graph: NDArray[Any] = empty(self._size, dtype=graph)
-        self.pgc: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-        self.properties: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.reference_count: NDArray[int64] = zeros(self._size, dtype=int64)
-        self.survivability: NDArray[float32] = zeros(self._size, dtype=float32)
+        for member in DEFAULT_STATIC_MEMBER_VALUES:
+            setattr(self, member, full(self._size, *static_val_type(member)))
 
         # Utility static store members
         # Access sequence of genetic codes. Used to determine which ones were least recently used.
