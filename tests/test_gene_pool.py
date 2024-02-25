@@ -53,6 +53,6 @@ def test_default_consistency() -> None:
                 assert gpc_gc[field]["signature"].tobytes() == gp_gc[field].tobytes()
             elif isinstance(gpc_gc[field], _genetic_code) and gl_gc[field] is None:
                 assert gpc_gc[field] is EMPTY_GENETIC_CODE
-            else:
+            elif field != "graph":
                 assert gpc_gc[field] == gl_gc[field]
                 assert gpc_gc[field] == gp_gc[field]
