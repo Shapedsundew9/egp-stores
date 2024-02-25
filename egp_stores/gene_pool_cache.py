@@ -55,28 +55,33 @@ from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
 from typing import Any, Callable, Iterable, Iterator, cast
 
-from egp_types._genetic_code import _genetic_code, EMPTY_GENETIC_CODE, NULL_SIGNATURE, STORE_PROXY_SIGNATURE_MEMBERS, DEFAULT_STATIC_MEMBER_VALUES, DEFAULT_DYNAMIC_MEMBER_VALUES
+from egp_types._genetic_code import (DEFAULT_DYNAMIC_MEMBER_VALUES,
+                                     DEFAULT_STATIC_MEMBER_VALUES,
+                                     EMPTY_GENETIC_CODE, STORE_ALL_MEMBERS,
+                                     STORE_PROXY_SIGNATURE_MEMBERS,
+                                     _genetic_code)
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
-from egp_types.graph import graph, EMPTY_GRAPH
+from egp_types.graph import graph
 from egp_types.interface import interface
 from egp_types.rows import rows
 from egp_utils.base_validator import base_validator
 from egp_utils.common import merge
 from egp_utils.store import DDSL, dynamic_store, static_store
-from numpy import argsort, bytes_, ndarray, full, iinfo, int32, int64, zeros
+from numpy import (argsort, bytes_, full, iinfo, int32, int64, ndarray, uint8,
+                   zeros)
 from numpy.typing import NDArray
 from pypgtable.pypgtable_typing import SchemaColumn
 from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
 from .gene_pool_common import GP_RAW_TABLE_SCHEMA
 
-
 # Logging
 _logger: Logger = getLogger(__name__)
 _logger.addHandler(NullHandler())
 _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 _LOG_DEEP_DEBUG: bool = _logger.isEnabledFor(DEBUG - 1)
+_logger.debug(f"All store members: {STORE_ALL_MEMBERS}")
 
 
 # TODO: Make a new cerberus validator for this extending the pypgtable raw_table_column_config_validator
@@ -210,7 +215,7 @@ class gene_pool_cache(static_store):
         # Status byte for each genetic code.
         # 0 = dirty bit. If set then the genetic code has been modified and needs to be written to the GP.
         # 1:7 = reserved (read and written as 0)
-        self.status_byte: NDArray[bytes_] = zeros(self._size, dtype=bytes_)
+        self.status_byte: NDArray[bytes_] = zeros(self._size, dtype=uint8)
 
         # Common dynamic store indices. -1 means not in the common dynamic store.
         self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
@@ -266,6 +271,12 @@ class gene_pool_cache(static_store):
         idx: int = self.next_index()
         self.genetic_code[idx] = obj
         return idx
+
+    def next_ds_index(self, idx) -> int32:
+        """Assign a new dynamic index. DO NOT USE outside of gene_pool_cache or genetic_code classes."""
+        ds_idx: int = self._common_ds.next_index()
+        self.common_ds_idx[idx] = ds_idx
+        return int32(ds_idx)
 
     def next_index(self) -> int:
         """Return the next available index. If there are no more purge the genetic codes that have not been
@@ -356,6 +367,10 @@ class gene_pool_cache(static_store):
         """
         # Make a dictionary of signatures to indices in the GPC
         sig_to_idx: dict[memoryview, int] = {gc["signature"].tobytes(): idx for idx, gc in enumerate(self.genetic_code) if gc.valid()}
+        if _LOG_DEEP_DEBUG:
+            _logger.debug(f"EMPTY_GENETIC_CODE signature: {EMPTY_GENETIC_CODE['signature'].tobytes().hex()}")
+            for sig, idx in sig_to_idx.items():
+                _logger.debug(f"GPC signature: {sig.hex()} at index {idx}")
 
         # #1 & #2
         # For every leaf GC check to see if any of its dependents are in the GPC
