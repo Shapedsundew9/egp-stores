@@ -27,12 +27,12 @@ _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 
 # The update string
 # No longer used but still here just in case of future need.
-_WEIGHTED_VARIABLE_UPDATE_RAW = (
-    "vector_weighted_variable_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}" ", 0.0::REAL, 0::INTEGER)"
-)
+# _WEIGHTED_VARIABLE_UPDATE_RAW = (
+#     "vector_weighted_variable_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC}" ", 0.0::REAL, 0::INTEGER)"
+# )
 _WEIGHTED_FIXED_UPDATE_RAW = "weighted_fixed_array_update({CSCV}, {CSCC}, {PSCV}, {PSCC}, {CSPV}, {CSPC})"
 _FIXED_UPDATE_RAW = "fixed_array_update({CSCC}, {PSCC}, {CSPC})"
-_SCALAR_COUNT_UPDATE = "{CSCC} + {PSCC} - {CSPC}"
+_SCALAR_COUNT_UPDATE = "({CSCC} + {PSCC} - {CSPC})"
 _WEIGHTED_SCALAR_UPDATE = "({CSCV} * {CSCC} + {PSCV} * {PSCC} - {CSPV} * {CSPC}) / " + _SCALAR_COUNT_UPDATE
 _PGC_EVO_UPDATE_MAP: dict[str, str] = {
     "CSCV": "EXCLUDED.{pgc_evolvability}",

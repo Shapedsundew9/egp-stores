@@ -48,33 +48,27 @@ is read only avoiding 4x as many CoW's giving a total factor of ~16x for that da
 Bit of an anti-pattern for python but in this case the savings are worth it.
 """
 
-from copy import deepcopy
 from gc import collect
-from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
-from os.path import dirname, join
 from typing import Any, Callable, Iterable, Iterator, cast
 
 from egp_types._genetic_code import (DEFAULT_DYNAMIC_MEMBER_VALUES,
                                      DEFAULT_STATIC_MEMBER_VALUES,
                                      EMPTY_GENETIC_CODE, STORE_ALL_MEMBERS,
                                      STORE_PROXY_SIGNATURE_MEMBERS,
+                                     PURGED_GENETIC_CODE,
                                      _genetic_code)
 from egp_types.connections import connections
 from egp_types.genetic_code import genetic_code
 from egp_types.graph import graph
-from egp_types.interface import interface
+from egp_types.interface import interface, EMPTY_INTERFACE, EMPTY_INTERFACE_C
 from egp_types.rows import rows
-from egp_utils.base_validator import base_validator
-from egp_utils.common import merge
 from egp_utils.store import DDSL, dynamic_store, static_store
 from numpy import (argsort, bytes_, full, iinfo, int32, int64, ndarray, uint8,
-                   zeros)
+                   zeros, intp, logical_and, argwhere, bitwise_and, bool_)
 from numpy.typing import NDArray
 from pypgtable.pypgtable_typing import SchemaColumn
-from pypgtable.validators import PYPGTABLE_COLUMN_CONFIG_SCHEMA
 
-from .gene_pool_common import GP_RAW_TABLE_SCHEMA
 
 # Logging
 _logger: Logger = getLogger(__name__)
@@ -102,20 +96,8 @@ class ConfigDefinition(SchemaColumn):
 # Constants
 GPC_DEFAULT_SIZE: int = 2**4
 INT64_MAX: int = iinfo(int64).max
-
-
-# Load the GPC config definition which is a superset of the pypgtable column definition
-GPC_FIELD_SCHEMA: dict[str, dict[str, Any]] = deepcopy(PYPGTABLE_COLUMN_CONFIG_SCHEMA)
-with open(join(dirname(__file__), "formats/gpc_field_definition_format.json"), "r", encoding="utf8") as file_ptr:
-    merge(GPC_FIELD_SCHEMA, load(file_ptr))
-gpc_field_validator: base_validator = base_validator(GPC_FIELD_SCHEMA, purge_uknown=True)
-GPC_RAW_TABLE_SCHEMA: dict[str, dict[str, Any]] = deepcopy(GP_RAW_TABLE_SCHEMA)
-with open(join(dirname(__file__), "formats/gpc_table_format.json"), "r", encoding="utf8") as file_ptr:
-    merge(GPC_RAW_TABLE_SCHEMA, load(file_ptr))
-GPC_TABLE_SCHEMA: dict[str, ConfigDefinition] = {k: gpc_field_validator.normalized(v) for k, v in GPC_RAW_TABLE_SCHEMA.items()}
-GPC_HIGHER_LAYER_COLS: tuple[str, ...] = tuple(key for key in filter(lambda x: x[0] == "_", GPC_TABLE_SCHEMA))
-GPC_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple(x[1:] for x in GPC_HIGHER_LAYER_COLS) + ("updated", "created")
-GPC_REFERENCE_COLUMNS: tuple[str, ...] = tuple((key for key, _ in filter(lambda x: x[1].get("reference", False), GPC_TABLE_SCHEMA.items())))
+EGC_PTR = intp(id(EMPTY_GENETIC_CODE))
+PGC_PTR = intp(id(PURGED_GENETIC_CODE))
 
 
 class ds_index_wrapper:
@@ -192,8 +174,9 @@ def static_val_type(member: str) -> tuple[Any, type]:
 
 class gene_pool_cache(static_store):
     """A memory efficient store genetic codes."""
+    # TODO: Consider numpy record arrays for the static store members
 
-    def __init__(self, size: int = GPC_DEFAULT_SIZE, push_to_gp: Callable[[tuple[genetic_code, ...]], None] = lambda x: None) -> None:
+    def __init__(self, size: int = GPC_DEFAULT_SIZE, push_to_gp: Callable[[Iterable[dict[str, Any]]], None] = lambda x: None) -> None:
         """Initialize the storage."""
         super().__init__(size)
         # Static store members
@@ -230,7 +213,7 @@ class gene_pool_cache(static_store):
         }
 
         # Method to push genetic codes to the gene pool when the GPC is full
-        self._push_to_gp: Callable[[tuple[genetic_code, ...]], None] = push_to_gp
+        self._push_to_gp: Callable[[Iterable[dict[str, Any]]], None] = push_to_gp
 
     def __delitem__(self, idx: int) -> None:
         """Free the specified index. Note this does not try and remove all references as purge() does.
@@ -258,12 +241,17 @@ class gene_pool_cache(static_store):
             raise IndexError("Negative indices are not supported.")
         return self.genetic_code[idx]
 
-    def __setitem__(self, _: str, __: Any) -> None:
-        raise RuntimeError("The genetic code store does not support setting members directly. Use add().")
-
     def __iter__(self) -> Iterator[_genetic_code]:
         """Iterate over self."""
         return self.values()
+
+    def __setitem__(self, _: str, __: Any) -> None:
+        raise RuntimeError("The genetic code store does not support setting members directly. Use add().")
+
+    def add(self, ggc: dict[str, Any]) -> int:
+        """Add a dict type genetic code to the store. NOTE: no duplicate signature checking is done.
+        See update()."""
+        return genetic_code(ggc).idx
 
     def assign_index(self, obj: _genetic_code) -> int:
         """Return the next index for a new genetic code. DO NOT USE outside of the
@@ -271,6 +259,17 @@ class gene_pool_cache(static_store):
         idx: int = self.next_index()
         self.genetic_code[idx] = obj
         return idx
+
+    def dicts(self) -> Iterator[dict[str, Any]]:
+        """Return the genetic codes as dictionaries."""
+        for gc in self.values():
+            yield gc.as_dict()
+
+    def leaves(self) -> Iterator[intp]:
+        """Return each index of the leaf genetic codes."""
+        # TODO: See how much faster this would be as numpy array manipulation
+        valid: NDArray[intp] = argwhere(self.common_ds_idx != -1).flatten()
+        yield from valid
 
     def next_ds_index(self, idx) -> int32:
         """Assign a new dynamic index. DO NOT USE outside of gene_pool_cache or genetic_code classes."""
@@ -287,72 +286,6 @@ class gene_pool_cache(static_store):
             self.purge()
             idx = super().next_index()
         return idx
-
-    def add(self, ggc: dict[str, Any]) -> int:
-        """Add a dict type genetic code to the store."""
-        return genetic_code(ggc).idx
-
-    def update(self, ggcs: Iterable[dict[str, Any]]) -> list[int]:
-        """Add a dict type genetic code to the store."""
-        size_before: int = len(self)
-        retval: list[int] = [genetic_code(o).idx for o in cast(Iterable[dict[str, Any]], ggcs)]
-        size_after: int = len(self)
-        _logger.info(f"Added {size_after - size_before} genetic codes to the GPC")
-        return retval
-
-    def reset(self, size: int | None = None) -> None:
-        """A full reset of the store allows the size to be changed. All genetic codes
-        are deleted which pushes the genetic codes to the genomic library as required.
-        """
-        super().reset(size)
-        # Static store members
-        for member in DEFAULT_STATIC_MEMBER_VALUES:
-            setattr(self, member, full(self._size, *static_val_type(member)))
-
-        # Utility static store members
-        # Access sequence of genetic codes. Used to determine which ones were least recently used.
-        self.access_sequence: NDArray[int64] = full(self._size, INT64_MAX, dtype=int64)
-        # Common dynamic store indices. -1 means not in the common dynamic store.
-        self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
-        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
-
-        # Re-initialize the common dynamic store wrapper
-        for index_wrapper in self._common_ds_members.values():
-            index_wrapper.index_mapping = self.common_ds_idx
-        common_ds_index_wrapper.genetic_codes = self.genetic_code
-
-        # Clean up the heap
-        _logger.info("GPC reset to {self._size} entries and cleared.")
-        _logger.debug(f"{collect()} unreachable objects not collected after reset.")
-
-        # Total = 2* 8 + 5 * 4 = 36 bytes + base class per element
-
-    def purge(self, fraction: float = 0.25) -> None:
-        """Purge the store of unused data."""
-        # Simply marking the data as unused is insufficient because the purged
-        # data may be referenced by other objects. The purge function ensures that
-        # all references to the purged data in the store are removed.
-        num_to_purge: int = int(self._size * fraction)
-        _logger.info(f"Purging {int(100 * fraction)}% = ({num_to_purge} of {self._size}) of the store")
-        purge_indices: set[int] = set(argsort(self.access_sequence)[:num_to_purge])
-        if _LOG_DEEP_DEBUG:
-            _logger.info(f"Purging indices: {purge_indices}")
-            _logger.debug(f"Access sequence numbers {self.access_sequence}")
-        # Convert GC's with purged dependents into leaf nodes
-        gc: _genetic_code
-        for gc in self.genetic_code:
-            gc.purge(purge_indices)
-
-        # Push dirty genetic codes to the GP
-        dirty_indices: set[int] = {idx for idx, byte in enumerate(self.status_byte) if byte & 1}
-        self._push_to_gp(tuple(self.genetic_code[idx] for idx in dirty_indices))
-
-        # Delete the purged objects
-        for idx in purge_indices:
-            del self[idx]
-
-        # Clean up the heap: Intentionally calleding collect() regardless of the debug level.
-        _logger.debug(f"{collect()} unreachable objects not collected after purge.")
 
     def optimize(self) -> None:
         """Optimize the store by looking for commonalities between genetic codes.
@@ -395,11 +328,12 @@ class gene_pool_cache(static_store):
         for gc in self.values():
             _rows: rows = gc["graph"].rows
             for row, iface in enumerate(_rows):
-                if iface not in iface_to_iface:
-                    iface_to_iface[iface] = iface
-                else:
-                    _rows[row] = iface_to_iface[iface]
-                    count += 1
+                if iface is not EMPTY_INTERFACE_C and iface is not EMPTY_INTERFACE:
+                    if iface not in iface_to_iface:
+                        iface_to_iface[iface] = iface
+                    else:
+                        _rows[row] = iface_to_iface[iface]
+                        count += 1
         _logger.info(f"Removed {count} duplicate interfaces.")
 
         # #4
@@ -447,20 +381,83 @@ class gene_pool_cache(static_store):
         _logger.info(f"Removed {count} duplicate graphs.")
         collect()
 
-    def leaves(self) -> Iterator[int]:
-        """Return each index of the leaf genetic codes."""
-        # TODO: See how much faster this would be as numpy array manipulation
-        for idx, _ in filter(lambda x: x[1] != -1, enumerate(self.common_ds_idx)):
-            yield idx
+    def purge(self, fraction: float = 0.25) -> None:
+        """Push dirty GC's to the GP and purge the store of unused data if less
+        than fraction empty space is available."""
+        # Simply marking the data as unused is insufficient because the purged
+        # data may be referenced by other objects. The purge function ensures that
+        # all references to the purged data in the store are removed.
+        num_to_purge: int = int(self._size * fraction)
+        _logger.info(f"Purging {int(100 * fraction)}% = ({num_to_purge} of {self._size}) of the store")
+        purge_candidates = set(argsort(self.access_sequence)[:num_to_purge])
+        ptrs = ndarray(self._size, dtype=intp, buffer=self.genetic_code.data)
+        purge_indices: set[intp] = purge_candidates.intersection(argwhere(logical_and(ptrs != EGC_PTR, ptrs != PGC_PTR)).flatten())
+        if _LOG_DEEP_DEBUG:
+            _logger.info(f"Purging indices: {purge_indices}")
+            _logger.debug(f"Access sequence numbers {self.access_sequence}")
+        # Convert GC's with purged dependents into leaf nodes
+        gc: _genetic_code
+        for gc in self.genetic_code:
+            gc.purge(purge_indices)
+
+        # Push dirty genetic codes to the GP and make them clean again
+        dirty_gcs: NDArray = self.genetic_code[bitwise_and(self.status_byte, 1).astype(bool_)]
+        self._push_to_gp(ggcs=(gc.as_dict() for gc in dirty_gcs))  # type: ignore
+        for dgc in dirty_gcs:
+            dgc.clean()
+
+        # Delete the purged objects
+        for idx in purge_indices:
+            del self[idx]
+
+        # Clean up the heap: Intentionally calleding collect() regardless of the debug level.
+        _logger.debug(f"{collect()} unreachable objects not collected after purge.")
+
+    def reset(self, size: int | None = None) -> None:
+        """A full reset of the store allows the size to be changed. All genetic codes
+        are deleted which pushes the genetic codes to the genomic library as required.
+        """
+        super().reset(size)
+        # Static store members
+        for member in DEFAULT_STATIC_MEMBER_VALUES:
+            setattr(self, member, full(self._size, *static_val_type(member)))
+
+        # Utility static store members
+        # Access sequence of genetic codes. Used to determine which ones were least recently used.
+        self.access_sequence: NDArray[int64] = full(self._size, INT64_MAX, dtype=int64)
+        # Common dynamic store indices. -1 means not in the common dynamic store.
+        self.common_ds_idx: NDArray[int32] = full(self._size, int32(-1), dtype=int32)
+        self.genetic_code: NDArray[Any] = full(self._size, EMPTY_GENETIC_CODE, dtype=_genetic_code)
+
+        # Re-initialize the common dynamic store wrapper
+        for index_wrapper in self._common_ds_members.values():
+            index_wrapper.index_mapping = self.common_ds_idx
+        common_ds_index_wrapper.genetic_codes = self.genetic_code
+
+        # Clean up the heap
+        _logger.info("GPC reset to {self._size} entries and cleared.")
+        _logger.debug(f"{collect()} unreachable objects not collected after reset.")
+
+        # Total = 2* 8 + 5 * 4 = 36 bytes + base class per element
 
     def signatures(self) -> Iterator[memoryview]:
         """Return the signatures of the genetic codes."""
         for gc in self.values():
             yield gc["signature"].data
 
+    def update(self, ggcs: Iterable[dict[str, Any]]) -> list[int]:
+        """Add an iterable dict type genetic code to the store checking for signatures that
+        are already in the store. NOTE: The ggcs iterable is not checked for duplicates."""
+        signatures = set(s.tobytes() for s in self.signatures())
+        size_before: int = len(self)
+        retval: list[int] = [genetic_code(o).idx for o in ggcs if o["signature"].tobytes() not in signatures]
+        size_after: int = len(self)
+        _logger.info(f"Added {size_after - size_before} genetic codes to the GPC")
+        return retval
+
     def values(self) -> Iterator[_genetic_code]:
         """Return the genetic codes."""
-        # TODO: See how much faster this would be as numpy array manipulation
-        # e.g. for gc in self.genetic_code[self.genetic_code != EMPTY_GENETIC_CODE & self.genetic_code != PURGED_GENETIC_CODE]
-        for gc in filter(lambda x: x.valid(), self.genetic_code):
-            yield gc
+        # This method is about 300x faster than list comprehension with if comparison
+        ptrs = ndarray(self._size, dtype=intp, buffer=self.genetic_code.data)
+        valid: NDArray = self.genetic_code[logical_and(ptrs != EGC_PTR, ptrs != PGC_PTR)]
+        yield from valid

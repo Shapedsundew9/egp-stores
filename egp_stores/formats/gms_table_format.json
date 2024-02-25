@@ -33,15 +33,6 @@
         "default": "0",
         "type": "BIGINT"
     },
-    "ac_count": {
-        "default": "0",
-        "type": "BIGINT",
-        "volatile": true
-    },
-    "alpha_class": {
-        "type": "REAL[4]",
-        "volatile": true
-    },
     "code_depth": {
         "default": "0",
         "type": "INTEGER"

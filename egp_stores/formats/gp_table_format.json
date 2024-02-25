@@ -1,13 +1,13 @@
 {
     "f_count": {
         "ggc_only": true,
-        "nullable": true,
+        "default": "0",
         "type": "INTEGER",
         "volatile": true
     },
     "fitness": {
         "ggc_only": true,
-        "nullable": true,
+        "default": "0.0",
         "type": "REAL",
         "volatile": true
     },
