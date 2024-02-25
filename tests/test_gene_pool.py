@@ -10,7 +10,7 @@ from egp_stores.gene_pool import default_config as gp_default_config
 from egp_stores.gene_pool import gene_pool
 from egp_stores.genomic_library import default_config as gl_default_config
 from egp_stores.genomic_library import genomic_library
-from egp_stores.gene_pool_cache import STORE_ALL_MEMBERS, _genetic_code
+from egp_stores.gene_pool_cache import STORE_ALL_MEMBERS, _genetic_code, EMPTY_GENETIC_CODE
 
 
 _logger: Logger = getLogger(__name__)
@@ -48,9 +48,11 @@ def test_default_consistency() -> None:
                 else:
                     assert (gpc_gc[field] == gl_gc[field]).all()
                     assert (gpc_gc[field] == gp_gc[field]).all()
-            elif isinstance(gpc_gc[field], _genetic_code):
+            elif isinstance(gpc_gc[field], _genetic_code) and gl_gc[field] is not None:
                 assert gpc_gc[field]["signature"].tobytes() == gl_gc[field].tobytes()
                 assert gpc_gc[field]["signature"].tobytes() == gp_gc[field].tobytes()
+            elif isinstance(gpc_gc[field], _genetic_code) and gl_gc[field] is None:
+                assert gpc_gc[field] is EMPTY_GENETIC_CODE
             else:
                 assert gpc_gc[field] == gl_gc[field]
                 assert gpc_gc[field] == gp_gc[field]
