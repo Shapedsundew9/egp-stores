@@ -176,9 +176,15 @@ class gene_pool_cache(static_store):
     """A memory efficient store genetic codes."""
     # TODO: Consider numpy record arrays for the static store members
 
-    def __init__(self, size: int = GPC_DEFAULT_SIZE, push_to_gp: Callable[[Iterable[dict[str, Any]]], None] = lambda x: None) -> None:
+    def __init__(self,
+        genetic_code_type: type[_genetic_code],
+        size: int = GPC_DEFAULT_SIZE,
+        push_to_gp: Callable[[Iterable[dict[str, Any]]], None] = lambda x: None) -> None:
         """Initialize the storage."""
         super().__init__(size)
+        self.genetic_code_type = genetic_code_type
+        self.genetic_code_type.set_gpc(self)
+
         # Static store members
         for member in DEFAULT_STATIC_MEMBER_VALUES:
             setattr(self, member, full(self._size, *static_val_type(member)))
@@ -251,7 +257,7 @@ class gene_pool_cache(static_store):
     def add(self, ggc: dict[str, Any]) -> int:
         """Add a dict type genetic code to the store. NOTE: no duplicate signature checking is done.
         See update()."""
-        return genetic_code(ggc).idx
+        return self.genetic_code_type(ggc).idx
 
     def assign_index(self, obj: _genetic_code) -> int:
         """Return the next index for a new genetic code. DO NOT USE outside of the
@@ -409,7 +415,6 @@ class gene_pool_cache(static_store):
         # Delete the purged objects
         for idx in purge_indices:
             del self[idx]
-
         # Clean up the heap: Intentionally calleding collect() regardless of the debug level.
         _logger.debug(f"{collect()} unreachable objects not collected after purge.")
 
@@ -450,7 +455,7 @@ class gene_pool_cache(static_store):
         are already in the store. NOTE: The ggcs iterable is not checked for duplicates."""
         signatures = set(s.tobytes() for s in self.signatures())
         size_before: int = len(self)
-        retval: list[int] = [genetic_code(o).idx for o in ggcs if o["signature"].tobytes() not in signatures]
+        retval: list[int] = [self.genetic_code_type(o).idx for o in ggcs if o["signature"].tobytes() not in signatures]
         size_after: int = len(self)
         _logger.info(f"Added {size_after - size_before} genetic codes to the GPC")
         return retval

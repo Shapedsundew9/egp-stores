@@ -10,7 +10,7 @@ from functools import partial
 from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.xgc_validator import gGC_entry_validator
-from egp_types.genetic_code import genetic_code
+from egp_types.genetic_code import genetic_code_factory
 from egp_utils.common import merge, default_erasumus_db_config
 from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, TableConfigNorm, TableSchema
@@ -208,8 +208,7 @@ class gene_pool(genetic_material_store):
 
         self._populations: dict[int, PopulationConfigNorm] = deepcopy(populations)
         self.glib: genomic_library = glib
-        self.pool: gene_pool_cache = gene_pool_cache(2**20, partial(_update, gp=self))
-        genetic_code.set_gpc(self.pool)
+        self.pool: gene_pool_cache = gene_pool_cache(genetic_code_factory(), 2**20, partial(_update, gp=self))
 
         self._tables: dict[str, table] = {"meta_data": table(self.config["meta_data"])}
         if self._tables["meta_data"].raw.creator:
@@ -345,8 +344,8 @@ def _update(gp: gene_pool, ggcs: Iterable[dict[str, Any]]) -> None:
         for _ in filter(lambda x: not gGC_entry_validator.validate(x), ggcs):
             _logger.error(f"gGC from GPC to be pushed to persistent GP is invalid:\n{gGC_entry_validator.error_str()}.")
             assert False, "gGC from GPC to be pushed to persistent GP is invalid"
-    x = input("Continue? ")
+    # x = input("Continue? ")
     gp.library.upsert(ggcs, gp.update_str)
-    x = input("Continue? ")
+    # x = input("Continue? ")
     # TODO: Add a check to see if the upsert updated the GP as expected. Can do this
     # by pulling the GC's back out and checking the values.
