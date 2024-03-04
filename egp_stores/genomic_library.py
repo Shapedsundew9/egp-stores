@@ -117,6 +117,7 @@ class genomic_library(genetic_material_store):
     The genomic library must be self consistent i.e. no entry can reference a genetic code
     that is not in the genomic library.
     """
+
     def __init__(self, config: TableConfig | TableConfigNorm = default_config(), data_files: list[str] = _DATA_FILES) -> None:
         """Connect to or create a genomic library."""
         super().__init__(config, data_files)

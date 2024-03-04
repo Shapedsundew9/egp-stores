@@ -46,7 +46,7 @@ _CONFIG: dict[str, Any] = {
     "wait_for_table": False,
 }
 
-with open(join(dirname(__file__), "../egp_stores/formats/gp_meta_table_format.json"), "r", encoding='ascii') as file_ptr:
+with open(join(dirname(__file__), "../egp_stores/formats/gp_meta_table_format.json"), "r", encoding="ascii") as file_ptr:
     _META_TABLE_SCHEMA: Any = load(file_ptr)
 
 

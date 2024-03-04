@@ -1,4 +1,5 @@
 """Gene pool management for Erasmus GP."""
+
 from __future__ import annotations
 from copy import deepcopy
 from json import load
@@ -11,12 +12,12 @@ from egp_types.conversions import compress_json, decompress_json, memoryview_to_
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_types.genetic_code import genetic_code_factory
+from egp_types.genetic_code_cache import genetic_code_cache
 from egp_utils.common import merge, default_erasumus_db_config
 from pypgtable import table
 from pypgtable.pypgtable_typing import Conversions, TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
 
-from .gene_pool_cache import gene_pool_cache
 
 from .gene_pool_common import (
     GP_HIGHER_LAYER_COLS,
@@ -48,7 +49,7 @@ _GP_CONVERSIONS: Conversions = (
     ("graph", compress_json, decompress_json),
     ("meta_data", compress_json, decompress_json),  # TODO: Why store this?
     ("inputs", None, memoryview_to_bytes),
-    ("outputs", None, memoryview_to_bytes)
+    ("outputs", None, memoryview_to_bytes),
 )
 
 
@@ -133,12 +134,12 @@ _DEFAULT_CONFIGS: GenePoolConfigNorm = {
 }
 
 
-def default_config(table_name_postfix:str = "") -> GenePoolConfigNorm:
+def default_config(table_name_postfix: str = "") -> GenePoolConfigNorm:
     """Return a deepcopy of the default genomic library configuration.
 
     The copy may be modified and used to create a genomic library instance.
     table_name_postfix: A string to append to the table names. This is useful
-    for creating multiple gene pools of the same default configuration. 
+    for creating multiple gene pools of the same default configuration.
 
     Returns
     -------
@@ -200,15 +201,17 @@ class gene_pool(genetic_material_store):
         genomic_library: Source of genetic material.
         configs: The config is deep copied by pypgtable.
         """
+
         # Normalize the table configs
         def normalize(k, v) -> dict[str, Any]:
             return merge(v, raw_table_config_validator.normalized(config.get(k, {})), no_new_keys=True, update=True)
-        self.config: GenePoolConfigNorm = cast(GenePoolConfigNorm,{k: normalize(k, v) for k, v in _DEFAULT_CONFIGS.items()})
+
+        self.config: GenePoolConfigNorm = cast(GenePoolConfigNorm, {k: normalize(k, v) for k, v in _DEFAULT_CONFIGS.items()})
         super().__init__(self.config["gene_pool"], [])
 
         self._populations: dict[int, PopulationConfigNorm] = deepcopy(populations)
         self.glib: genomic_library = glib
-        self.pool: gene_pool_cache = gene_pool_cache(genetic_code_factory(), 2**20, partial(_update, gp=self))
+        self.cache: genetic_code_cache = genetic_code_cache(genetic_code_factory(), 2**20, partial(_update, gpool=self))
 
         self._tables: dict[str, table] = {"meta_data": table(self.config["meta_data"])}
         if self._tables["meta_data"].raw.creator:
@@ -259,20 +262,20 @@ class gene_pool(genetic_material_store):
         for population in self._populations.values():
             literals: dict[str, Any] = {"limit": population["size"], "puid": population["uid"]}
             _logger.info(f"Pulling {population['size']} from population {population['uid']}.")
-            self.pool.update(self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS))
+            self.cache.update(self.library.select(_LOAD_GPC_SQL, literals, _LOAD_GP_COLUMNS))
             self.library.raw.ptr_map_def(_PTR_MAP_PLUS_PGC)
             _logger.info("Pulling population sub-GC's and pGC's from the Gene Pool.")
-            self.pool.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.pool.signatures())}))
+            self.cache.update(self.library.recursive_select(_SIGNATURE_SQL, {"matches": list(self.cache.signatures())}))
             self.library.raw.ptr_map_def(_PTR_MAP)
             literals = {"limit": population["size"]}
             for layer in range(NUM_PGC_LAYERS):
-                literals["exclusions"] = list({v["pgc"]["signature"] for v in self.pool.values()})
+                literals["exclusions"] = list({v["pgc"]["signature"] for v in self.cache.values()})
                 literals["layer"] = layer
                 _logger.info(f"Pulling best pGC's at layer {layer}.")
-                self.pool.update(self.library.select(_LOAD_PGC_SQL, literals))
+                self.cache.update(self.library.select(_LOAD_PGC_SQL, literals))
         # Saves space by removing duplicate constant objects
         _logger.info("Optimizing the local cache.")
-        self.pool.optimize()
+        self.cache.optimize()
         _logger.info("Local cache loaded & optimized. Ready to evolve!")
 
     def pull(self, signatures: list[memoryview], population_uid: int | None = None) -> None:
@@ -318,7 +321,7 @@ class gene_pool(genetic_material_store):
                 _logger.debug(f"Updating evolvability from {ggc['evolvability']} to {update['evolvability']}.")
             ggc.update(update)
             ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
-            self.pool.add(ggc)
+            self.cache.add(ggc)
             if _LOG_DEBUG:
                 for k, v in ggc.items():
                     if isinstance(v, memoryview):
@@ -331,21 +334,21 @@ class gene_pool(genetic_material_store):
         batch.clear()
 
 
-def _update(gp: gene_pool, ggcs: Iterable[dict[str, Any]]) -> None:
+def _update(gpool: gene_pool, ggcs: Iterable[dict[str, Any]]) -> None:
     """Push the genetic codes into the persistent store of the gene pool."""
     # To keep pylance happy about 'possibly unbound'
     if _LOG_DEEP_DEBUG:
         _logger.debug("Validating GPC GC's --> GP DB entries.")
         ggcs = tuple(ggcs)
-        for gc in ggcs:
-            for k, v in gc.items():
+        for gcode in ggcs:
+            for k, v in gcode.items():
                 if isinstance(v, memoryview):
-                    gc[k] = bytes(v)
+                    gcode[k] = bytes(v)
         for _ in filter(lambda x: not gGC_entry_validator.validate(x), ggcs):
             _logger.error(f"gGC from GPC to be pushed to persistent GP is invalid:\n{gGC_entry_validator.error_str()}.")
             assert False, "gGC from GPC to be pushed to persistent GP is invalid"
     # x = input("Continue? ")
-    gp.library.upsert(ggcs, gp.update_str)
+    gpool.library.upsert(ggcs, gpool.update_str)
     # x = input("Continue? ")
     # TODO: Add a check to see if the upsert updated the GP as expected. Can do this
     # by pulling the GC's back out and checking the values.
