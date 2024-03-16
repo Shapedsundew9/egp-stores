@@ -5,25 +5,21 @@ from copy import deepcopy
 from json import load
 from logging import DEBUG, Logger, NullHandler, getLogger
 from os.path import dirname, join
-from typing import Any, TYPE_CHECKING, cast, Iterable
+from typing import Any, TYPE_CHECKING, cast, Iterable, Callable
 from functools import partial
 
-from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes
+from egp_types.conversions import compress_json, decompress_json, memoryview_to_bytes, ndarray_to_bytes, memoryview_to_ndarray
 from egp_types.gc_type_tools import NUM_PGC_LAYERS
 from egp_types.xgc_validator import gGC_entry_validator
 from egp_types.genetic_code import genetic_code_factory
 from egp_types.genetic_code_cache import genetic_code_cache
 from egp_utils.common import merge, default_erasumus_db_config
 from pypgtable import table
-from pypgtable.pypgtable_typing import Conversions, TableConfigNorm, TableSchema
+from pypgtable.pypgtable_typing import TableConfigNorm, TableSchema
 from pypgtable.validators import raw_table_config_validator
 
 
-from .gene_pool_common import (
-    GP_HIGHER_LAYER_COLS,
-    GP_RAW_TABLE_SCHEMA,
-    GP_UPDATE_RETURNING_COLS,
-)
+from .gene_pool_common import GP_HIGHER_LAYER_COLS, GP_RAW_TABLE_SCHEMA, GP_UPDATE_RETURNING_COLS, GP_SIGNATURE_COLUMNS
 from .genetic_material_store import genetic_material_store, _PTR_MAP_PLUS_PGC, UPDATE_STR, _PTR_MAP
 from .genomic_library import (
     GL_HIGHER_LAYER_COLS,
@@ -45,12 +41,12 @@ _LOG_DEBUG: bool = _logger.isEnabledFor(DEBUG)
 _LOG_DEEP_DEBUG: bool = _logger.isEnabledFor(DEBUG - 1)
 
 
-_GP_CONVERSIONS: Conversions = (
+_GP_CONVERSIONS: tuple[tuple[str, Callable | None, Callable | None], ...] = (
     ("graph", compress_json, decompress_json),
     ("meta_data", compress_json, decompress_json),  # TODO: Why store this?
     ("inputs", None, memoryview_to_bytes),
     ("outputs", None, memoryview_to_bytes),
-)
+) + tuple((col, ndarray_to_bytes, memoryview_to_ndarray) for col in GP_SIGNATURE_COLUMNS)
 
 
 with open(
@@ -206,7 +202,7 @@ class gene_pool(genetic_material_store):
         def normalize(k, v) -> dict[str, Any]:
             return merge(v, raw_table_config_validator.normalized(config.get(k, {})), no_new_keys=True, update=True)
 
-        self.config: GenePoolConfigNorm = cast(GenePoolConfigNorm, {k: normalize(k, v) for k, v in _DEFAULT_CONFIGS.items()})
+        self.config: GenePoolConfigNorm = cast(GenePoolConfigNorm, {k: normalize(k, v) for k, v in default_config().items()})
         super().__init__(self.config["gene_pool"], [])
 
         self._populations: dict[int, PopulationConfigNorm] = deepcopy(populations)
@@ -257,7 +253,7 @@ class gene_pool(genetic_material_store):
         5. If not enough quality population pull from higher layer or create eGC's.
         """
         _logger.info("Populating local cache from Gene Pool.")
-        self.pull(list(s[0] for s in self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
+        self.pull(list(s[0].data for s in self.glib.select(_LOAD_CODONS_SQL, columns=("signature",), container="tuple")))
         _logger.info("Codons pulled from genomic library.")
         for population in self._populations.values():
             literals: dict[str, Any] = {"limit": population["size"], "puid": population["uid"]}
@@ -322,14 +318,10 @@ class gene_pool(genetic_material_store):
             ggc.update(update)
             ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
             self.cache.add(ggc)
-            if _LOG_DEBUG:
-                for k, v in ggc.items():
-                    if isinstance(v, memoryview):
-                        ggc[k] = bytes(v)
-                if not gGC_entry_validator.validate(ggc):
-                    _logger.error(ggc)
-                    _logger.error(gGC_entry_validator.error_str())
-                    assert False, "GGC is not valid!"
+            if _LOG_DEBUG and not gGC_entry_validator.validate(ggc):
+                _logger.error(ggc)
+                _logger.error(gGC_entry_validator.error_str())
+                assert False, "GGC is not valid!"
         # Empty the batch list
         batch.clear()
 
@@ -340,10 +332,6 @@ def _update(gpool: gene_pool, ggcs: Iterable[dict[str, Any]]) -> None:
     if _LOG_DEEP_DEBUG:
         _logger.debug("Validating GPC GC's --> GP DB entries.")
         ggcs = tuple(ggcs)
-        for gcode in ggcs:
-            for k, v in gcode.items():
-                if isinstance(v, memoryview):
-                    gcode[k] = bytes(v)
         for _ in filter(lambda x: not gGC_entry_validator.validate(x), ggcs):
             _logger.error(f"gGC from GPC to be pushed to persistent GP is invalid:\n{gGC_entry_validator.error_str()}.")
             assert False, "gGC from GPC to be pushed to persistent GP is invalid"

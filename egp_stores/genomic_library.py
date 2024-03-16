@@ -7,7 +7,14 @@ from os.path import dirname, join
 from pprint import pformat
 from typing import Any, Callable, Iterable
 
-from egp_types.conversions import compress_json, decompress_json, encode_properties, memoryview_to_bytes
+from egp_types.conversions import (
+    compress_json,
+    decompress_json,
+    encode_properties,
+    memoryview_to_bytes,
+    ndarray_to_bytes,
+    memoryview_to_ndarray,
+)
 from egp_types.xgc_validator import LGC_json_load_entry_validator
 from egp_utils.common import merge, default_erasumus_db_config
 from text_token import register_token_code, text_token
@@ -67,7 +74,7 @@ _CONVERSIONS: tuple[tuple[str, Callable | None, Callable | None], ...] = (
     ("inputs", None, memoryview_to_bytes),
     ("outputs", None, memoryview_to_bytes),
     ("properties", encode_properties, None),
-)
+) + tuple((col, ndarray_to_bytes, memoryview_to_ndarray) for col in GL_SIGNATURE_COLUMNS)
 
 
 # The default config
@@ -157,10 +164,12 @@ class genomic_library(genetic_material_store):
             check_list = set()
         naughty_list: list[memoryview] = []
         for reference in references:
-            if not self.signature_exists(reference) and reference not in check_list:
-                naughty_list.append(reference)
-            else:
-                check_list.add(reference)
+            # Very odd. Even though the signature is a memoryview, it is still identified as an numpy array by lru_cache.
+            if not self.signature_exists(reference.tobytes()):
+                if reference not in check_list:
+                    naughty_list.append(reference)
+                else:
+                    check_list.add(reference)
         return naughty_list
 
     def _calculate_fields(self, entry: dict[str, Any], entries: dict[memoryview, dict[str, Any]]) -> None:
@@ -246,7 +255,9 @@ class genomic_library(genetic_material_store):
                     )
                 )
                 raise ValueError("Genomic library entry invalid.")
-            references: tuple[memoryview, ...] = tuple(entry[ref_col] for ref_col in GL_REFERENCE_COLUMNS if entry[ref_col] is not None)
+            references: tuple[memoryview, ...] = tuple(
+                entry[ref_col].data for ref_col in GL_REFERENCE_COLUMNS if entry[ref_col] is not None
+            )
             problem_references: list[memoryview] = self._check_references(references, check_list)
             if problem_references:
                 _logger.error(
@@ -269,7 +280,7 @@ class genomic_library(genetic_material_store):
         Iterate through all genetic codes validating the references exist.
         """
         for entry in self.library.select(container="tuple", columns=GL_REFERENCE_COLUMNS):
-            references: tuple[memoryview, ...] = tuple(sig for sig in entry if sig is not None)
+            references: tuple[memoryview, ...] = tuple(sig.data for sig in entry if sig is not None)
             problem_references: list[memoryview] = self._check_references(references)
             if problem_references:
                 full_entry: dict[str, Any] = self.library[references[GL_REFERENCE_COLUMNS.index("signature")]]

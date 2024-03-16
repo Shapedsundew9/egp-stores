@@ -15,4 +15,5 @@ with open(join(dirname(__file__), "formats/gp_table_format.json"), "r", encoding
 merge(GP_RAW_TABLE_SCHEMA, GL_RAW_TABLE_SCHEMA)
 GP_HIGHER_LAYER_COLS: tuple[str, ...] = tuple((key for key in filter(lambda x: x[0] == "_", GP_RAW_TABLE_SCHEMA)))
 GP_UPDATE_RETURNING_COLS: tuple[str, ...] = tuple((x[1:] for x in GP_HIGHER_LAYER_COLS)) + ("updated", "created")
+GP_SIGNATURE_COLUMNS: tuple[str, ...] = tuple(key for key, _ in filter(lambda x: x[1].get("signature", False), GP_RAW_TABLE_SCHEMA.items()))
 GP_REFERENCE_COLUMNS: tuple[str, ...] = tuple(k for k, _ in filter(lambda x: x[1].get("reference", False), GP_RAW_TABLE_SCHEMA.items()))

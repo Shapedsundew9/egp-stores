@@ -1,7 +1,7 @@
 """Test the Gene Pool."""
 from logging import INFO, CRITICAL, Logger, NullHandler, getLogger, basicConfig
 from typing import Any
-from numpy import ndarray
+from numpy import ndarray, array_equal
 from math import isclose
 
 from pypgtable.pypgtable_typing import TableConfigNorm
@@ -78,10 +78,16 @@ def test_dicts() -> None:
         gp_gc: dict[str, Any] = gp[gpc_gc["signature"]]
         for key, value in gpc_gc.items():
             if key in gl_gc:
-                assert value == gl_gc[key], f"{key}: {value} != {gl_gc[key]}"
+                if isinstance(value, ndarray):
+                    assert array_equal(value, gl_gc[key]), f"{key}: {value} != {gl_gc[key]}"
+                else:
+                    assert value == gl_gc[key], f"{key}: {value} != {gl_gc[key]}"
                 assert isinstance(value, type(gl_gc[key])), f"{key}: {value} != {gl_gc[key]}"
             if key in gp_gc:
-                assert value == gp_gc[key], f"{key}: {value} != {gp_gc[key]}"
+                if isinstance(value, ndarray):
+                    assert array_equal(value, gp_gc[key]), f"{key}: {value} != {gp_gc[key]}"
+                else:
+                    assert value == gp_gc[key], f"{key}: {value} != {gp_gc[key]}"
                 assert isinstance(value, type(gp_gc[key])), f"{key}: {value} != {gp_gc[key]}"
 
 
@@ -92,7 +98,6 @@ def test_dirty_update() -> None:
         gpc_gc["reference_count"] = 1975
         gpc_gc["evolvability"] = 0.78901234
         gpc_gc["e_count"] = 14
-    gp.cache.purge()
     gp.cache.reset()
     gp.populate_local_cache()
     for gpc_gc in gp.cache:
@@ -109,7 +114,7 @@ def test_two_gene_pools() -> None:
     """Test that two gene pools can be created and that they
     only interfere with each other in the right ways."""
     # Recreate GP (uses same config)
-    gp_config1: GenePoolConfigNorm = gp_default_config()
+    gp_config1: GenePoolConfigNorm = gp_default_config("1")
     for v in gp_config1.values():  # TableConfigNorm
         v["delete_table"] = True  # type: ignore
     gp1: gene_pool = gene_pool({}, glib, gp_config1)
@@ -118,7 +123,6 @@ def test_two_gene_pools() -> None:
         gpc_gc["reference_count"] = 1975
         gpc_gc["evolvability"] = 0.78901234
         gpc_gc["e_count"] = 14
-    gp1.cache.purge()
     gp1.cache.reset()
     gp1.populate_local_cache()
     for gpc_gc in gp1.cache:
@@ -126,9 +130,9 @@ def test_two_gene_pools() -> None:
         assert gpc_gc["reference_count"] == 1975 + 0
         assert isclose(gpc_gc["evolvability"], (0.78901234 * 14 + 1.0) / 15, rel_tol=1e-6)
         assert gpc_gc["e_count"] == 14 + 1
-        assert gpc_gc["reference_count"] == gp[gpc_gc["signature"].data]["reference_count"]
-        assert isclose(gpc_gc["evolvability"], gp[gpc_gc["signature"].data]["evolvability"], rel_tol=1e-6)
-        assert gpc_gc["e_count"] == gp[gpc_gc["signature"].data]["e_count"]
+        assert gpc_gc["reference_count"] == gp1[gpc_gc["signature"].data]["reference_count"]
+        assert isclose(gpc_gc["evolvability"], gp1[gpc_gc["signature"].data]["evolvability"], rel_tol=1e-6)
+        assert gpc_gc["e_count"] == gp1[gpc_gc["signature"].data]["e_count"]
 
     # Create a second GP
     gp_config2: GenePoolConfigNorm = gp_default_config("2")
@@ -145,6 +149,7 @@ def test_two_gene_pools() -> None:
     # Make sure the original GP is still correct
     for gpc_gc in gp1.cache:
         # NOTE: Some fields are accumulated or are a weighted average
+        _logger.debug(f"Checking GPC GC:\n{gpc_gc}")
         assert gpc_gc["reference_count"] == 1975 + 0
         assert isclose(gpc_gc["evolvability"], (0.78901234 * 14 + 1.0) / 15, rel_tol=1e-6)
         assert gpc_gc["e_count"] == 14 + 1

@@ -14,6 +14,8 @@ from logging import DEBUG, NullHandler, getLogger, Logger
 from os.path import dirname, join
 from typing import Any, Callable, Literal
 from functools import lru_cache
+from numpy.typing import NDArray
+from numpy import uint8, ndarray
 
 from pypgtable.table import table
 from pypgtable.pypgtable_typing import RowIter, TableConfig, TableConfigNorm, PtrMap
@@ -121,22 +123,26 @@ class genetic_material_store:
         if self.library.raw.creator:
             self._creator(data_files)
 
-    def __getitem__(self, signature: memoryview) -> dict[str, Any]:
+    def __getitem__(self, signature: memoryview | NDArray[uint8]) -> dict[str, Any]:
         """Pull a genetic code from the genomic library."""
-        entry = tuple(self.select("WHERE {signature} = {sig}", {"sig": signature}))
+        sig: memoryview = signature.data if isinstance(signature, ndarray) else signature
+        entry = tuple(self.select("WHERE {signature} = {sig}", {"sig": sig}))
         if entry:
             return entry[0]
+        _logger.error(f"Genetic code not found: {sig.hex()}")
         raise KeyError
 
     def _creator(self, data_files: list[str]) -> None:
         """Called if this instance created the library table in the database."""
         raise NotImplementedError("The creator method must be implemented by the subclass.")
 
-    def get(self, signature: memoryview) -> tuple[dict[str, Any], ...]:
+    def get(self, signature: memoryview | NDArray[uint8]) -> tuple[dict[str, Any], ...]:
         """Recursively pull a genetic code from the genomic library."""
-        entry = tuple(self.recursive_select("WHERE {signature} = {sig}", {"sig": signature}))
+        sig: memoryview = signature.data if isinstance(signature, ndarray) else signature
+        entry = tuple(self.recursive_select("WHERE {signature} = {sig}", {"sig": sig}))
         if entry:
             return entry
+        _logger.error(f"Genetic code not found: {sig.hex()}")
         raise KeyError
 
     @lru_cache(maxsize=10000)
