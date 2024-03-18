@@ -15,7 +15,7 @@ from egp_types.conversions import (
     ndarray_to_bytes,
     memoryview_to_ndarray,
 )
-from egp_types.xgc_validator import LGC_json_load_entry_validator
+from egp_types.xgc_validator import lGC_json_load_entry_validator
 from egp_utils.common import merge, default_erasumus_db_config
 from text_token import register_token_code, text_token
 from pypgtable.validators import raw_table_config_validator
@@ -43,6 +43,9 @@ DATA_FILE_FOLDER: str = join(dirname(__file__), "data")
 _DATA_FILES: list[str] = [join(DATA_FILE_FOLDER, data_file) for data_file in ("codons.json", "mutations.json")]
 
 
+# TODO: Create functions from registered tokens that take ordered or keyword arguments (reduces code bloat)
+# TODO: Call functions via dictionary look up. Use helper function to construct the key from severity, module number and token number.
+# TODO: Register module and associate with module number.
 register_token_code("I03000", "Adding data to table {table} from {file}.")
 register_token_code("I03001", "Library validation cache performance: {cache_info}.")
 register_token_code("E03000", "Query is not valid: {errors}: {query}")
@@ -130,6 +133,7 @@ class genomic_library(genetic_material_store):
         super().__init__(config, data_files)
 
     def _creator(self, data_files: list[str]) -> None:
+        """Called if this instance created the library table in the database."""
         self.library.raw.arbitrary_sql(gl_sql_functions(), read=False)
         for data_file in data_files:
             _logger.info(
@@ -143,7 +147,7 @@ class genomic_library(genetic_material_store):
                 )
             )
             with open(data_file, "r", encoding="utf-8") as file_ptr:
-                self.library.insert((LGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
+                self.library.insert((lGC_json_load_entry_validator.normalized(entry) for entry in load(file_ptr)))
 
     def _check_references(self, references: Iterable[memoryview], check_list: set[memoryview] | None = None) -> list[memoryview]:
         """Verify all the references exist in the genomic library.
@@ -189,9 +193,11 @@ class genomic_library(genetic_material_store):
         """
         # TODO: Need to update references.
         # TODO: Check consistency for GC's that are already stored.
+        # TODO: Remove recursion and use a queue/stack.
         gca: dict[str, int | bool] = _NULL_GC_DATA
         if not entry["gca"] is None:
             if entry["gca"] not in entries.keys():
+                # TODO: Does not need to be a full pull of the entry. Can just check if the signature exists.
                 if not self.library[entry["gca"]]:
                     _logger.error(f'entry["gca"] = {entry["gca"]} does not exist in the list to be stored or genomic library!')
                     _logger.error(f"Entries signature list: {entries.keys()}")
@@ -203,20 +209,24 @@ class genomic_library(genetic_material_store):
         gcb: dict[str, int | bool] = _NULL_GC_DATA
         if not entry["gcb"] is None:
             if entry["gcb"] not in entries.keys():
+                # TODO: Does not need to be a full pull of the entry. Can just check if the signature exists.
                 if not self.library[entry["gcb"]]:
                     _logger.error(f'entry["gcb"] = {entry["gcb"]} does not exist in the list to be stored or genomic library!')
                     _logger.error(f"Entries signature list: {entries.keys()}")
             else:
-                gcb = entries[entry["gca"]]
+                gcb = entries[entry["gcb"]]
                 if not gcb["_calculated"]:
-                    self._calculate_fields(gca, entries)
+                    self._calculate_fields(gcb, entries)
 
-        if not (entry["gca"] is None and entry["gcb"] is None):
-            entry["code_depth"] = max((gca["code_depth"], gcb["code_depth"])) + 1
-            entry["num_codes"] = gca["num_codes"] + gcb["num_codes"]
-            entry["raw_num_codons"] = gca["raw_num_codons"] + gcb["raw_num_codons"]
-            entry["generation"] = max((gca["generation"] + 1, gcb["generation"] + 1, entry["generation"]))
-            entry["properties"] = gca["properties"] | gcb["properties"]
+        # These fields should already have been set but do require knowledge of the other genetic codes that
+        # the genomic library is the single source of truth on.
+        if entry["gca"] is not None and entry["gcb"] is not None:
+            assert entry["code_depth"] == max((gca["code_depth"], gcb["code_depth"])) + 1, "GC code depth inconsistent."
+            assert entry["num_codes"] == gca["num_codes"] + gcb["num_codes"], "GC num_codes inconsistent."
+            assert entry["raw_num_codons"] == gca["raw_num_codons"] + gcb["raw_num_codons"], "GC raw_num_codons inconsistent."
+            assert entry["generation"] == max((gca["generation"] + 1, gcb["generation"] + 1, entry["generation"])), "GC generation inconsistent."
+            # FIXME: Properties are no a simple OR. AND or XOR are likely needed. Need a proper function definition to check.
+            assert entry["properties"] == gca["properties"] | gcb["properties"], "GC properties inconsistent."
         entry["_calculated"] = True
 
     def _normalize(self, entries: dict[memoryview, dict[str, Any]]) -> None:
@@ -232,7 +242,7 @@ class genomic_library(genetic_material_store):
         """
         _logger.debug(f"Normalizing {len(entries)} entries.")
         for signature, entry in entries.items():
-            entries[signature] = LGC_json_load_entry_validator.normalized(entry)
+            entries[signature] = lGC_json_load_entry_validator.normalized(entry)
             entries[signature]["_calculated"] = False
         for entry in entries.values():
             self._calculate_fields(entry, entries)
@@ -241,13 +251,13 @@ class genomic_library(genetic_material_store):
         check_list: set[memoryview] = set(entries.keys())
         for entry in entries.values():
             del entry["_calculated"]
-            if not LGC_json_load_entry_validator.validate(entry):
+            if not lGC_json_load_entry_validator.validate(entry):
                 _logger.error(
                     str(
                         text_token(
                             {
                                 "E03001": {
-                                    "errors": LGC_json_load_entry_validator.error_str(),
+                                    "errors": lGC_json_load_entry_validator.error_str(),
                                     "entry": pformat(entry, width=180),
                                 }
                             }
