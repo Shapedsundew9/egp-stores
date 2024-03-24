@@ -13,7 +13,6 @@ from json import load
 from logging import DEBUG, NullHandler, getLogger, Logger
 from os.path import dirname, join
 from typing import Any, Callable, Literal
-from functools import lru_cache
 from numpy.typing import NDArray
 from numpy import uint8, ndarray
 
@@ -145,9 +144,9 @@ class genetic_material_store:
         _logger.error(f"Genetic code not found: {sig.hex()}")
         raise KeyError
 
-    @lru_cache(maxsize=10000)
     def signature_exists(self, signature: memoryview) -> bool:
         """Check if a signature exists in the genomic library."""
+        # This cannot be cached because the library may change.
         return bool(
             tuple(
                 self.library.select(

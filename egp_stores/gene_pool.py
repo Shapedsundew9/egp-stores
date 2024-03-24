@@ -275,8 +275,8 @@ class gene_pool(genetic_material_store):
         _logger.info("Local cache loaded & optimized. Ready to evolve!")
 
     def pull(self, signatures: list[memoryview], population_uid: int | None = None) -> None:
-        """Pull aGCs and all sub-GC's recursively from the genomic library to the gene pool.
-        LGC's are converted to gGC's and higher layer fields are updated.
+        """Pull lGCs and all sub-GC's recursively from the genomic library to the gene pool.
+        lGC's are converted to gGC's and higher layer fields are updated.
         NOTE: This *MUST* be the only function pulling GC's into the GP from the GL.
 
         Args
@@ -312,9 +312,6 @@ class gene_pool(genetic_material_store):
         """Helper method for the pull method. This is the batch insertion into the GP."""
         # The GP has its own higher layer columns for the GPC which are returned by the upsert.
         for ggc, update in zip(batch, self.library.upsert(batch, self.update_str, {}, GP_UPDATE_RETURNING_COLS)):
-            if ggc["signature"].tobytes().hex() == "2a23746794352c8a78b6b016b0f50dfa7e2608fea98453b41d1ac98b8296eabc":
-                _logger.debug(f"Updating {ggc['signature'].tobytes().hex()} with {update}.")
-                _logger.debug(f"Updating evolvability from {ggc['evolvability']} to {update['evolvability']}.")
             ggc.update(update)
             ggc.update({k: ggc[k[1:]] for k in GP_HIGHER_LAYER_COLS})
             self.cache.add(ggc)

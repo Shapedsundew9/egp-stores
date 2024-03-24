@@ -120,9 +120,9 @@ class genomic_library(genetic_material_store):
     """Store of genetic codes & associated data.
 
     The genomic_library is responsible for:
-        1. Populating calculable entry fields.
+        1. Populating calculable entry fields in the lGC
         2. Validating entries to be added to the store.
-        3. Providing an application interface to the fields.
+        3. Checking the consistency of the entries being added with the store.
 
     The genomic library must be self consistent i.e. no entry can reference a genetic code
     that is not in the genomic library.
@@ -152,7 +152,7 @@ class genomic_library(genetic_material_store):
     def _check_references(self, references: Iterable[memoryview], check_list: set[memoryview] | None = None) -> list[memoryview]:
         """Verify all the references exist in the genomic library.
 
-        Genetic codes reference each other. A debugging check is to verify the
+        Genetic codes reference each other. A consistency check is to verify the
         existence of all the references.
 
         Args
@@ -167,13 +167,11 @@ class genomic_library(genetic_material_store):
         if check_list is None:
             check_list = set()
         naughty_list: list[memoryview] = []
-        for reference in references:
-            # Very odd. Even though the signature is a memoryview, it is still identified as an numpy array by lru_cache.
-            if not self.signature_exists(reference.tobytes()):
-                if reference not in check_list:
-                    naughty_list.append(reference)
-                else:
-                    check_list.add(reference)
+        for reference in filter(lambda x: x not in check_list, references):
+            if not self.signature_exists(reference):
+                naughty_list.append(reference)
+            else:
+                check_list.add(reference)
         return naughty_list
 
     def _calculate_fields(self, entry: dict[str, Any], entries: dict[memoryview, dict[str, Any]]) -> None:
@@ -224,7 +222,9 @@ class genomic_library(genetic_material_store):
             assert entry["code_depth"] == max((gca["code_depth"], gcb["code_depth"])) + 1, "GC code depth inconsistent."
             assert entry["num_codes"] == gca["num_codes"] + gcb["num_codes"], "GC num_codes inconsistent."
             assert entry["raw_num_codons"] == gca["raw_num_codons"] + gcb["raw_num_codons"], "GC raw_num_codons inconsistent."
-            assert entry["generation"] == max((gca["generation"] + 1, gcb["generation"] + 1, entry["generation"])), "GC generation inconsistent."
+            assert entry["generation"] == max(
+                (gca["generation"] + 1, gcb["generation"] + 1, entry["generation"])
+            ), "GC generation inconsistent."
             # FIXME: Properties are no a simple OR. AND or XOR are likely needed. Need a proper function definition to check.
             assert entry["properties"] == gca["properties"] | gcb["properties"], "GC properties inconsistent."
         entry["_calculated"] = True
@@ -290,7 +290,7 @@ class genomic_library(genetic_material_store):
         Iterate through all genetic codes validating the references exist.
         """
         for entry in self.library.select(container="tuple", columns=GL_REFERENCE_COLUMNS):
-            references: tuple[memoryview, ...] = tuple(sig.data for sig in entry if sig is not None)
+            references: tuple[memoryview, ...] = tuple(memoryview(sig.tobytes()) for sig in entry if sig is not None)
             problem_references: list[memoryview] = self._check_references(references)
             if problem_references:
                 full_entry: dict[str, Any] = self.library[references[GL_REFERENCE_COLUMNS.index("signature")]]
@@ -307,10 +307,6 @@ class genomic_library(genetic_material_store):
                     )
                 )
                 return False
-        _logger.info(
-            str(text_token({"I03001": {"cache_info": self.signature_exists.cache_info()}}))  ## pylint: disable=no-value-for-parameter
-        )  # pylint: disable=no-value-for-parameter
-        self.signature_exists.cache_clear()
         return True
 
     def upsert(self, entries: dict[memoryview, dict[str, Any]]) -> None:
